@@ -6,8 +6,6 @@ import os
 import time
 import re
 import requests
-from PIL import Image
-from io import BytesIO
 
 # =========================================================
 # LOAD ENV VARIABLES
@@ -59,7 +57,7 @@ client = InferenceClient(
 )
 
 # =========================================================
-# TELEGRAM MESSAGE FUNCTION
+# TELEGRAM TEXT MESSAGE
 # =========================================================
 
 def send_telegram_message(message):
@@ -68,7 +66,7 @@ def send_telegram_message(message):
 
     payload = {
         "chat_id": CHAT_ID,
-        "text": message
+        "text": message[:4000]
     }
 
     try:
@@ -86,87 +84,6 @@ def send_telegram_message(message):
 
         print("\nTELEGRAM MESSAGE ERROR:")
         print(e)
-
-# =========================================================
-# TELEGRAM PHOTO FUNCTION
-# =========================================================
-
-def send_telegram_photo(photo_path, caption):
-
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-
-    try:
-
-        with open(photo_path, "rb") as photo:
-
-            files = {
-                "photo": photo
-            }
-
-            data = {
-                "chat_id": CHAT_ID,
-                "caption": caption[:1000]
-            }
-
-            response = requests.post(
-                url,
-                files=files,
-                data=data
-            )
-
-        print("\n========== TELEGRAM PHOTO ==========")
-        print(response.text)
-
-    except Exception as e:
-
-        print("\nTELEGRAM PHOTO ERROR:")
-        print(e)
-
-# =========================================================
-# AI IMAGE GENERATION
-# =========================================================
-
-def generate_news_image(headline, index):
-
-    try:
-
-        image_prompt = f"""
-Create a cinematic breaking news thumbnail.
-
-Headline:
-{headline}
-
-Style:
-- ultra realistic
-- emotional
-- dramatic lighting
-- social media viral thumbnail
-- youtube shorts style
-- instagram reel style
-- highly engaging
-- modern digital art
-- 4k quality
-"""
-
-        image = client.text_to_image(
-            image_prompt,
-            model="stabilityai/stable-diffusion-xl-base-1.0"
-        )
-
-        image_path = f"news_image_{index}.png"
-
-        image.save(image_path)
-
-        print(f"\n✅ IMAGE SAVED: {image_path}")
-
-        return image_path
-
-    except Exception as e:
-
-        print("\nIMAGE GENERATION ERROR:")
-        print(e)
-
-        return None
 
 # =========================================================
 # RSS FEEDS
@@ -375,14 +292,10 @@ HASHTAGS:
         print("Final Score:", final_score)
 
         # =====================================================
-        # FILTER
+        # SAVE MOST NEWS
         # =====================================================
 
-        if (
-            final_score >= 3 or
-            virality_score >= 4 or
-            emotion_score >= 5
-        ):
+        if final_score >= 1:
 
             print("\n✅ SAVED")
 
@@ -436,6 +349,9 @@ if not results_df.empty:
     # TOP 10 NEWS
     results_df = results_df.head(10)
 
+    print("\nTOTAL TOP NEWS:", len(results_df))
+
+    # SAVE CSV
     results_df.to_csv(
         "viral_reel_news.csv",
         index=False
@@ -449,9 +365,11 @@ if not results_df.empty:
 
     for index, row in results_df.iterrows():
 
-        print(f"\n🔥 SENDING NEWS #{index + 1}")
+        try:
 
-        telegram_message = f"""
+            print(f"\n🔥 SENDING NEWS #{index + 1}")
+
+            telegram_message = f"""
 🔥 VIRAL NEWS #{index + 1}
 
 📰 HEADLINE:
@@ -480,41 +398,22 @@ if not results_df.empty:
 {row['ai_analysis'][:3000]}
 """
 
-        # =================================================
-        # GENERATE AI IMAGE
-        # =================================================
-
-        image_path = generate_news_image(
-            row['headline'],
-            index
-        )
-
-        # =================================================
-        # SEND IMAGE + MESSAGE
-        # =================================================
-
-        if image_path:
-
-            send_telegram_photo(
-                image_path,
-                telegram_message
-            )
-
-        else:
-
             send_telegram_message(
                 telegram_message
             )
 
-        print(f"✅ NEWS #{index + 1} SENT")
+            print(f"✅ NEWS #{index + 1} SENT")
 
-        # Avoid Telegram flood limit
-        time.sleep(5)
+            # avoid telegram flood limit
+            time.sleep(5)
+
+        except Exception as e:
+
+            print(f"\nERROR SENDING NEWS #{index + 1}")
+            print(e)
 
     print("\n✅ ALL TOP 10 NEWS SENT")
 
 else:
 
     print("\n❌ NO VIRAL NEWS FOUND")
-
-    print("\n❌ NO HIGH-VIRAL NEWS FOUND TODAY")
