@@ -57,7 +57,7 @@ client = InferenceClient(
 )
 
 # =========================================================
-# TELEGRAM TEXT MESSAGE
+# TELEGRAM MESSAGE FUNCTION
 # =========================================================
 
 def send_telegram_message(message):
@@ -66,7 +66,7 @@ def send_telegram_message(message):
 
     payload = {
         "chat_id": CHAT_ID,
-        "text": message[:4000]
+        "text": message[:3500]
     }
 
     try:
@@ -77,12 +77,12 @@ def send_telegram_message(message):
             timeout=30
         )
 
-        print("\n========== TELEGRAM MESSAGE ==========")
+        print("\n========== TELEGRAM RESPONSE ==========")
         print(response.text)
 
     except Exception as e:
 
-        print("\nTELEGRAM MESSAGE ERROR:")
+        print("\nTELEGRAM ERROR:")
         print(e)
 
 # =========================================================
@@ -123,7 +123,6 @@ for category, url in RSS_FEEDS.items():
 
         feed = feedparser.parse(url)
 
-        # FETCH MORE NEWS
         for entry in feed.entries[:20]:
 
             all_news.append({
@@ -176,49 +175,35 @@ for index, row in df.iterrows():
     print("=" * 80)
 
     prompt = f"""
-You are a world-class viral content strategist,
-Instagram reel expert,
-YouTube Shorts expert,
-and emotional storytelling analyst.
+You are an expert viral Facebook content writer,
+Hindi emotional storytelling writer,
+and social media engagement strategist.
 
-Analyze this news headline carefully.
+Analyze this news headline.
 
 HEADLINE:
 {headline}
 
-Your task:
-- detect emotional power
-- detect virality
-- detect curiosity
-- detect audience engagement
-- detect controversy
-- detect shareability
-
-Give scores STRICTLY in this format:
+Give output STRICTLY in this format:
 
 Emotion Score: number/10
 Virality Score: number/10
 Political Toxicity: number/10
 
-Then continue with:
-
 HOOK:
-(short ultra viral opening)
+(one short powerful emotional hook)
 
-SHORT REEL SCRIPT:
-(4-6 emotionally engaging lines)
-
-ENDING CTA:
-(one engagement line)
-
-HINDI REEL SCRIPT:
-(lengthy emotional Hindi spoken script)
-
-CAPTION:
-(short emotional caption)
+HINDI FACEBOOK ARTICLE:
+(write a proper emotional Hindi Facebook article.
+It should feel natural,
+engaging,
+human-written,
+emotionally strong,
+shareable,
+and suitable for viral Facebook posting.)
 
 HASHTAGS:
-(viral hashtags only)
+(only trending hashtags)
 """
 
     try:
@@ -234,7 +219,7 @@ HASHTAGS:
                 }
             ],
 
-            max_tokens=700
+            max_tokens=600
         )
 
         ai_result = response.choices[0].message.content
@@ -292,12 +277,10 @@ HASHTAGS:
         print("Final Score:", final_score)
 
         # =====================================================
-        # SAVE MOST NEWS
+        # SAVE NEWS
         # =====================================================
 
         if final_score >= 1:
-
-            print("\n✅ SAVED")
 
             results.append({
 
@@ -318,6 +301,8 @@ HASHTAGS:
                 "ai_analysis": ai_result
             })
 
+            print("\n✅ SAVED")
+
         else:
 
             print("\n❌ REJECTED")
@@ -336,7 +321,7 @@ HASHTAGS:
 results_df = pd.DataFrame(results)
 
 # =========================================================
-# SAVE + SEND
+# SORT + SEND
 # =========================================================
 
 if not results_df.empty:
@@ -353,30 +338,25 @@ if not results_df.empty:
 
     # SAVE CSV
     results_df.to_csv(
-        "viral_reel_news.csv",
+        "viral_facebook_news.csv",
         index=False
     )
 
-    print("\n========== TOP 10 VIRAL NEWS ==========\n")
+    print("\n========== SENDING TOP NEWS ==========\n")
 
     # =====================================================
-    # SEND TOP 10 NEWS
+    # SEND ONE BY ONE
     # =====================================================
 
     for index, row in results_df.iterrows():
 
         try:
 
-            print(f"\n🔥 SENDING NEWS #{index + 1}")
-
             telegram_message = f"""
 🔥 VIRAL NEWS #{index + 1}
 
 📰 HEADLINE:
 {row['headline']}
-
-📂 CATEGORY:
-{row['category']}
 
 📈 FINAL SCORE:
 {row['final_score']}
@@ -393,10 +373,12 @@ if not results_df.empty:
 🔗 LINK:
 {row['link']}
 
-==================================================
+━━━━━━━━━━━━━━━━━━
 
-{row['ai_analysis'][:3000]}
+{row['ai_analysis'][:1500]}
 """
+
+            print(f"\nSENDING NEWS #{index + 1}")
 
             send_telegram_message(
                 telegram_message
@@ -412,7 +394,7 @@ if not results_df.empty:
             print(f"\nERROR SENDING NEWS #{index + 1}")
             print(e)
 
-    print("\n✅ ALL TOP 10 NEWS SENT")
+    print("\n✅ ALL TOP NEWS SENT")
 
 else:
 
