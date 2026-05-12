@@ -6,12 +6,12 @@ import os
 import time
 import re
 import requests
+from PIL import Image
+from io import BytesIO
 
 # =========================================================
 # LOAD ENV VARIABLES
 # =========================================================
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 load_dotenv()
 
@@ -31,23 +31,21 @@ if not CHAT_ID:
     missing.append("TELEGRAM_CHAT_ID")
 
 if missing:
+
     raise RuntimeError(
         f"""
 Missing environment variables:
 
 {', '.join(missing)}
 
-Create .env file in same folder as script.
-
-Example:
-
-HF_TOKEN=your_huggingface_token
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
+Required:
+HF_TOKEN
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
 """
     )
 
-print("\n========== ENV VARIABLES LOADED ==========")
+print("\n========== ENV VARIABLES ==========")
 print("HF_TOKEN:", bool(HF_TOKEN))
 print("BOT_TOKEN:", bool(BOT_TOKEN))
 print("CHAT_ID:", bool(CHAT_ID))
@@ -61,7 +59,7 @@ client = InferenceClient(
 )
 
 # =========================================================
-# TELEGRAM FUNCTION
+# TELEGRAM MESSAGE FUNCTION
 # =========================================================
 
 def send_telegram_message(message):
@@ -81,19 +79,101 @@ def send_telegram_message(message):
             timeout=30
         )
 
-        print("\n========== TELEGRAM RESPONSE ==========")
+        print("\n========== TELEGRAM MESSAGE ==========")
         print(response.text)
 
     except Exception as e:
 
-        print("\nTELEGRAM ERROR:")
+        print("\nTELEGRAM MESSAGE ERROR:")
         print(e)
 
 # =========================================================
-# RSS NEWS FEEDS
+# TELEGRAM PHOTO FUNCTION
+# =========================================================
+
+def send_telegram_photo(photo_path, caption):
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+
+    try:
+
+        with open(photo_path, "rb") as photo:
+
+            files = {
+                "photo": photo
+            }
+
+            data = {
+                "chat_id": CHAT_ID,
+                "caption": caption[:1000]
+            }
+
+            response = requests.post(
+                url,
+                files=files,
+                data=data
+            )
+
+        print("\n========== TELEGRAM PHOTO ==========")
+        print(response.text)
+
+    except Exception as e:
+
+        print("\nTELEGRAM PHOTO ERROR:")
+        print(e)
+
+# =========================================================
+# AI IMAGE GENERATION
+# =========================================================
+
+def generate_news_image(headline, index):
+
+    try:
+
+        image_prompt = f"""
+Create a cinematic breaking news thumbnail.
+
+Headline:
+{headline}
+
+Style:
+- ultra realistic
+- emotional
+- dramatic lighting
+- social media viral thumbnail
+- youtube shorts style
+- instagram reel style
+- highly engaging
+- modern digital art
+- 4k quality
+"""
+
+        image = client.text_to_image(
+            image_prompt,
+            model="stabilityai/stable-diffusion-xl-base-1.0"
+        )
+
+        image_path = f"news_image_{index}.png"
+
+        image.save(image_path)
+
+        print(f"\n✅ IMAGE SAVED: {image_path}")
+
+        return image_path
+
+    except Exception as e:
+
+        print("\nIMAGE GENERATION ERROR:")
+        print(e)
+
+        return None
+
+# =========================================================
+# RSS FEEDS
 # =========================================================
 
 RSS_FEEDS = {
+
     "India":
     "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
 
@@ -126,21 +206,25 @@ for category, url in RSS_FEEDS.items():
 
         feed = feedparser.parse(url)
 
-        for entry in feed.entries[:5]:
+        # FETCH MORE NEWS
+        for entry in feed.entries[:20]:
 
             all_news.append({
+
                 "category": category,
+
                 "headline": entry.title,
+
                 "link": entry.link
             })
 
     except Exception as e:
 
-        print(f"Error fetching {category}")
+        print(f"\nERROR FETCHING {category}")
         print(e)
 
 # =========================================================
-# DATAFRAME
+# CREATE DATAFRAME
 # =========================================================
 
 df = pd.DataFrame(all_news)
@@ -158,7 +242,7 @@ print("\nTOTAL UNIQUE NEWS:", len(df))
 
 results = []
 
-print("\n========== AI VIRAL ANALYSIS STARTED ==========\n")
+print("\n========== AI ANALYSIS STARTED ==========\n")
 
 # =========================================================
 # ANALYZE NEWS
@@ -171,7 +255,6 @@ for index, row in df.iterrows():
     link = row["link"]
 
     print("\n" + "=" * 80)
-    print(f"CATEGORY: {category}")
     print(f"HEADLINE: {headline}")
     print("=" * 80)
 
@@ -186,14 +269,13 @@ Analyze this news headline carefully.
 HEADLINE:
 {headline}
 
-Your job:
+Your task:
 - detect emotional power
-- detect viral potential
-- detect audience curiosity
+- detect virality
+- detect curiosity
+- detect audience engagement
 - detect controversy
 - detect shareability
-
-Avoid boring analysis.
 
 Give scores STRICTLY in this format:
 
@@ -204,28 +286,29 @@ Political Toxicity: number/10
 Then continue with:
 
 HOOK:
-(one ultra-viral opening line)
+(short ultra viral opening)
 
 SHORT REEL SCRIPT:
-(4-6 powerful lines)
+(4-6 emotionally engaging lines)
 
 ENDING CTA:
-(one audience engagement line)
+(one engagement line)
 
 HINDI REEL SCRIPT:
-(simple emotional spoken Hindi but lenghty  script for maximum emotional impact)
+(lengthy emotional Hindi spoken script)
 
 CAPTION:
 (short emotional caption)
 
 HASHTAGS:
-(only trending hashtags)
+(viral hashtags only)
 """
 
     try:
 
         response = client.chat_completion(
-            model="meta-llama/Meta-Llama-3-8B-Instruct",
+
+            model="mistralai/Mistral-7B-Instruct-v0.2",
 
             messages=[
                 {
@@ -274,7 +357,7 @@ HASHTAGS:
         ) if toxicity_match else 0
 
         # =====================================================
-        # FINAL VIRAL SCORE
+        # FINAL SCORE
         # =====================================================
 
         final_score = (
@@ -286,20 +369,22 @@ HASHTAGS:
         final_score = round(final_score, 2)
 
         print("\n========== SCORES ==========")
-        print("Emotion Score:", emotion_score)
-        print("Virality Score:", virality_score)
-        print("Political Toxicity:", toxicity_score)
-        print("Final Viral Score:", final_score)
+        print("Emotion:", emotion_score)
+        print("Virality:", virality_score)
+        print("Toxicity:", toxicity_score)
+        print("Final Score:", final_score)
 
         # =====================================================
-        # FILTER BEST NEWS ONLY
+        # FILTER
         # =====================================================
 
         if (
-            final_score >= 3 or virality_score >= 4 or emotion_score >=5
+            final_score >= 3 or
+            virality_score >= 4 or
+            emotion_score >= 5
         ):
 
-            print("\n✅ HIGH VIRAL POTENTIAL DETECTED")
+            print("\n✅ SAVED")
 
             results.append({
 
@@ -322,7 +407,7 @@ HASHTAGS:
 
         else:
 
-            print("\n❌ REJECTED (LOW VIRAL POTENTIAL)")
+            print("\n❌ REJECTED")
 
         time.sleep(2)
 
@@ -332,13 +417,13 @@ HASHTAGS:
         print(e)
 
 # =========================================================
-# CREATE RESULTS DATAFRAME
+# RESULTS DATAFRAME
 # =========================================================
 
 results_df = pd.DataFrame(results)
 
 # =========================================================
-# SAVE RESULTS
+# SAVE + SEND
 # =========================================================
 
 if not results_df.empty:
@@ -348,28 +433,34 @@ if not results_df.empty:
         ascending=False
     )
 
-    # TOP 10 ONLY
+    # TOP 10 NEWS
     results_df = results_df.head(10)
 
-    csv_path = os.path.join(
-        SCRIPT_DIR,
-        "viral_reel_news.csv"
-    )
-
     results_df.to_csv(
-        csv_path,
+        "viral_reel_news.csv",
         index=False
     )
 
-    print("\n========== TOP VIRAL NEWS ==========\n")
+    print("\n========== TOP 10 VIRAL NEWS ==========\n")
 
-    for i, row in results_df.iterrows():
+    # =====================================================
+    # SEND TOP 10 NEWS
+    # =====================================================
 
-        print(f"""
-🔥 HEADLINE:
+    for index, row in results_df.iterrows():
+
+        print(f"\n🔥 SENDING NEWS #{index + 1}")
+
+        telegram_message = f"""
+🔥 VIRAL NEWS #{index + 1}
+
+📰 HEADLINE:
 {row['headline']}
 
-📈 VIRAL SCORE:
+📂 CATEGORY:
+{row['category']}
+
+📈 FINAL SCORE:
 {row['final_score']}
 
 ❤️ EMOTION:
@@ -377,53 +468,53 @@ if not results_df.empty:
 
 🚀 VIRALITY:
 {row['virality_score']}/10
-""")
 
-    # =====================================================
-    # SEND BEST NEWS TO TELEGRAM
-    # =====================================================
+⚠️ TOXICITY:
+{row['toxicity_score']}/10
 
-    best_news = results_df.iloc[0]
+🔗 LINK:
+{row['link']}
 
-    telegram_message = f"""
-🔥 TOP VIRAL NEWS ALERT 🔥
+==================================================
 
-📰 {best_news['headline']}
-
-📂 Category:
-{best_news['category']}
-
-📈 Final Viral Score:
-{best_news['final_score']}
-
-❤️ Emotion Score:
-{best_news['emotion_score']}/10
-
-🚀 Virality Score:
-{best_news['virality_score']}/10
-
-⚠️ Toxicity:
-{best_news['toxicity_score']}/10
-
-🔗 Link:
-{best_news['link']}
-
-==========================
-
-{best_news['ai_analysis'][:3500]}
+{row['ai_analysis'][:3000]}
 """
 
-    print("\n========== SENDING TO TELEGRAM ==========\n")
+        # =================================================
+        # GENERATE AI IMAGE
+        # =================================================
 
-    send_telegram_message(
-        telegram_message
-    )
+        image_path = generate_news_image(
+            row['headline'],
+            index
+        )
 
-    print("\n✅ BEST VIRAL NEWS SENT TO TELEGRAM")
+        # =================================================
+        # SEND IMAGE + MESSAGE
+        # =================================================
 
-    print("\n✅ CSV SAVED:")
-    print(csv_path)
+        if image_path:
+
+            send_telegram_photo(
+                image_path,
+                telegram_message
+            )
+
+        else:
+
+            send_telegram_message(
+                telegram_message
+            )
+
+        print(f"✅ NEWS #{index + 1} SENT")
+
+        # Avoid Telegram flood limit
+        time.sleep(5)
+
+    print("\n✅ ALL TOP 10 NEWS SENT")
 
 else:
+
+    print("\n❌ NO VIRAL NEWS FOUND")
 
     print("\n❌ NO HIGH-VIRAL NEWS FOUND TODAY")
