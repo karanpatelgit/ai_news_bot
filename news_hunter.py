@@ -13,7 +13,7 @@ import requests
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-load_dotenv(os.path.join(SCRIPT_DIR, ".env"))
+load_dotenv()
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
