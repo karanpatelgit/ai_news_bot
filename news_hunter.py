@@ -17,51 +17,27 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-missing = []
+if not all([HF_TOKEN, BOT_TOKEN, CHAT_ID]):
+    raise RuntimeError("Missing HF_TOKEN / TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID")
 
-if not HF_TOKEN:
-    missing.append("HF_TOKEN")
-
-if not BOT_TOKEN:
-    missing.append("TELEGRAM_BOT_TOKEN")
-
-if not CHAT_ID:
-    missing.append("TELEGRAM_CHAT_ID")
-
-if missing:
-
-    raise RuntimeError(
-        f"""
-Missing environment variables:
-
-{', '.join(missing)}
-
-Required:
-HF_TOKEN
-TELEGRAM_BOT_TOKEN
-TELEGRAM_CHAT_ID
-"""
-    )
-
-print("\n========== ENV VARIABLES ==========")
-print("HF_TOKEN:", bool(HF_TOKEN))
-print("BOT_TOKEN:", bool(BOT_TOKEN))
-print("CHAT_ID:", bool(CHAT_ID))
+print("✅ ENV LOADED")
 
 # =========================================================
-# HUGGING FACE CLIENT
+# HUGGING FACE CLIENT (FIXED)
 # =========================================================
 
 client = InferenceClient(
+    provider="hf-inference",   # 🔥 IMPORTANT FIX
     token=HF_TOKEN
 )
 
+MODEL_NAME = "HuggingFaceH4/zephyr-7b-beta"  # ✅ WORKING MODEL
+
 # =========================================================
-# TELEGRAM MESSAGE FUNCTION
+# TELEGRAM
 # =========================================================
 
 def send_telegram_message(message):
-
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
     payload = {
@@ -70,71 +46,34 @@ def send_telegram_message(message):
     }
 
     try:
-
-        response = requests.post(
-            url,
-            data=payload,
-            timeout=30
-        )
-
-        print("\n========== TELEGRAM RESPONSE ==========")
-        print(response.text)
-
+        r = requests.post(url, data=payload, timeout=30)
+        print("Telegram:", r.text)
     except Exception as e:
-
-        print("\nTELEGRAM ERROR:")
-        print(e)
+        print("Telegram error:", e)
 
 # =========================================================
-# SHORT LINK FUNCTION
+# SHORT URL
 # =========================================================
 
-def shorten_url(long_url):
-
+def shorten_url(url):
     try:
-
-        api_url = f"https://tinyurl.com/api-create.php?url={long_url}"
-
-        response = requests.get(
-            api_url,
-            timeout=20
+        r = requests.get(
+            f"https://tinyurl.com/api-create.php?url={url}",
+            timeout=10
         )
-
-        if response.status_code == 200:
-
-            return response.text
-
-        else:
-
-            return long_url
-
-    except Exception as e:
-
-        print("\nSHORT LINK ERROR:")
-        print(e)
-
-        return long_url
+        return r.text if r.status_code == 200 else url
+    except:
+        return url
 
 # =========================================================
 # RSS FEEDS
 # =========================================================
 
 RSS_FEEDS = {
-
-    "India":
-    "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
-
-    "Technology":
-    "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
-
-    "World":
-    "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
-
-    "Business":
-    "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en",
-
-    "Entertainment":
-    "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-IN&gl=IN&ceid=IN:en"
+    "India": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
+    "Tech": "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
+    "World": "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
+    "Business": "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en",
 }
 
 # =========================================================
@@ -143,296 +82,133 @@ RSS_FEEDS = {
 
 all_news = []
 
-print("\n========== FETCHING NEWS ==========\n")
+for cat, url in RSS_FEEDS.items():
+    print(f"Fetching {cat}")
+    feed = feedparser.parse(url)
 
-for category, url in RSS_FEEDS.items():
+    for entry in feed.entries[:15]:
+        all_news.append({
+            "category": cat,
+            "headline": entry.title,
+            "link": entry.link
+        })
 
-    print(f"Fetching: {category}")
+df = pd.DataFrame(all_news).drop_duplicates(subset=["headline"])
 
-    try:
-
-        feed = feedparser.parse(url)
-
-        for entry in feed.entries[:20]:
-
-            all_news.append({
-
-                "category": category,
-
-                "headline": entry.title,
-
-                "link": entry.link
-            })
-
-    except Exception as e:
-
-        print(f"\nERROR FETCHING {category}")
-        print(e)
+print("Total news:", len(df))
 
 # =========================================================
-# CREATE DATAFRAME
-# =========================================================
-
-df = pd.DataFrame(all_news)
-
-df.drop_duplicates(
-    subset=["headline"],
-    inplace=True
-)
-
-print("\nTOTAL UNIQUE NEWS:", len(df))
-
-# =========================================================
-# RESULTS STORAGE
+# ANALYSIS
 # =========================================================
 
 results = []
 
-print("\n========== AI ANALYSIS STARTED ==========\n")
-
-# =========================================================
-# ANALYZE NEWS
-# =========================================================
-
-for index, row in df.iterrows():
+for i, row in df.iterrows():
 
     headline = row["headline"]
-    category = row["category"]
     link = row["link"]
+    category = row["category"]
 
-    print("\n" + "=" * 80)
-    print(f"HEADLINE: {headline}")
-    print("=" * 80)
+    print("\n", "="*60)
+    print("HEADLINE:", headline)
 
     prompt = f"""
-You are an expert viral Facebook content writer,
-Hindi emotional storytelling writer,
-and social media engagement strategist.
+You are a viral Hindi Facebook content writer.
 
-Analyze this news headline.
+Analyze this headline:
 
-HEADLINE:
 {headline}
 
-Give output STRICTLY in this format:
+Return format:
 
-Emotion Score: number/10
-Virality Score: number/10
-Political Toxicity: number/10
+Emotion Score: X/10
+Virality Score: X/10
+Political Toxicity: X/10
 
 HOOK:
-(one short powerful emotional hook)
+(one emotional hook)
 
-HINDI FACEBOOK ARTICLE:
-(write a proper emotional Hindi Facebook article.
-It should feel natural,
-engaging,
-human-written,
-emotionally strong,
-shareable,
-and suitable for viral Facebook posting.)
+HINDI ARTICLE:
+(emotional viral Hindi story)
 
 HASHTAGS:
-(only trending hashtags)
+(trending hashtags)
 """
 
     try:
-
         response = client.chat_completion(
-
-            model="HuggingFaceH4/zephyr-7b-beta",
-            temperature=0.7,
-            top_p=0.9,
-
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-
-            max_tokens=600
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,
+            temperature=0.7
         )
 
-        ai_result = response.choices[0].message.content
+        text = response.choices[0].message.content
+        print("\nAI OUTPUT:\n", text)
 
-        print("\n========== AI RESPONSE ==========\n")
-        print(ai_result)
+        # ---------------- SCORES ----------------
+        emotion = int(re.search(r"Emotion Score:\s*(\d+)", text).group(1) or 0)
+        virality = int(re.search(r"Virality Score:\s*(\d+)", text).group(1) or 0)
+        toxicity = int(re.search(r"Political Toxicity:\s*(\d+)", text).group(1) or 0)
 
-        # =====================================================
-        # EXTRACT SCORES
-        # =====================================================
-
-        emotion_match = re.search(
-            r"Emotion Score:\s*(\d+)",
-            ai_result
-        )
-
-        virality_match = re.search(
-            r"Virality Score:\s*(\d+)",
-            ai_result
-        )
-
-        toxicity_match = re.search(
-            r"Political Toxicity:\s*(\d+)",
-            ai_result
-        )
-
-        emotion_score = int(
-            emotion_match.group(1)
-        ) if emotion_match else 0
-
-        virality_score = int(
-            virality_match.group(1)
-        ) if virality_match else 0
-
-        toxicity_score = int(
-            toxicity_match.group(1)
-        ) if toxicity_match else 0
-
-        # =====================================================
-        # FINAL SCORE
-        # =====================================================
-
-        final_score = (
-            virality_score * 0.5 +
-            emotion_score * 0.35 -
-            toxicity_score * 0.15
-        )
-
-        final_score = round(final_score, 2)
-
-        print("\n========== SCORES ==========")
-        print("Emotion:", emotion_score)
-        print("Virality:", virality_score)
-        print("Toxicity:", toxicity_score)
-        print("Final Score:", final_score)
-
-        # =====================================================
-        # SAVE NEWS
-        # =====================================================
+        final_score = round((virality * 0.5) + (emotion * 0.35) - (toxicity * 0.15), 2)
 
         if final_score >= 1:
 
             results.append({
-
                 "category": category,
-
                 "headline": headline,
-
                 "link": link,
-
-                "emotion_score": emotion_score,
-
-                "virality_score": virality_score,
-
-                "toxicity_score": toxicity_score,
-
-                "final_score": final_score,
-
-                "ai_analysis": ai_result
+                "emotion": emotion,
+                "virality": virality,
+                "toxicity": toxicity,
+                "score": final_score,
+                "ai": text
             })
 
-            print("\n✅ SAVED")
-
+            print("✅ SAVED")
         else:
-
-            print("\n❌ REJECTED")
+            print("❌ SKIPPED")
 
         time.sleep(2)
 
     except Exception as e:
-
-        print("\nAI ERROR:")
-        print(e)
+        print("AI ERROR:", e)
 
 # =========================================================
-# RESULTS DATAFRAME
+# SEND TOP RESULTS
 # =========================================================
 
-results_df = pd.DataFrame(results)
+if results:
 
-# =========================================================
-# SORT + SEND
-# =========================================================
+    results = sorted(results, key=lambda x: x["score"], reverse=True)[:10]
 
-if not results_df.empty:
+    for idx, r in enumerate(results):
 
-    results_df = results_df.sort_values(
-        by="final_score",
-        ascending=False
-    )
+        short = shorten_url(r["link"])
 
-    # TOP 10 NEWS
-    results_df = results_df.head(10)
+        msg = f"""
+🔥 VIRAL NEWS #{idx+1}
 
-    print("\nTOTAL TOP NEWS:", len(results_df))
+📰 {r['headline']}
 
-    # SAVE CSV
-    results_df.to_csv(
-        "viral_facebook_news.csv",
-        index=False
-    )
+📊 Score: {r['score']}
+❤️ Emotion: {r['emotion']}/10
+🚀 Virality: {r['virality']}/10
+⚠️ Toxicity: {r['toxicity']}/10
 
-    print("\n========== SENDING TOP NEWS ==========\n")
+🔗 {short}
 
-    # =====================================================
-    # SEND ONE BY ONE
-    # =====================================================
-
-    for index, row in results_df.iterrows():
-
-        try:
-
-            # CREATE SHORT LINK
-            short_link = shorten_url(
-                row['link']
-            )
-
-            telegram_message = f"""
-🔥 VIRAL NEWS #{index + 1}
-
-📰 HEADLINE:
-{row['headline']}
-
-📈 FINAL SCORE:
-{row['final_score']}
-
-❤️ EMOTION:
-{row['emotion_score']}/10
-
-🚀 VIRALITY:
-{row['virality_score']}/10
-
-⚠️ TOXICITY:
-{row['toxicity_score']}/10
-
-🔗 LINK:
-{short_link}
-
-━━━━━━━━━━━━━━━━━━
-
-{row['ai_analysis'][:1500]}
+━━━━━━━━━━━━━━
+{r['ai'][:1200]}
 """
 
-            print(f"\nSENDING NEWS #{index + 1}")
+        send_telegram_message(msg)
+        time.sleep(4)
 
-            send_telegram_message(
-                telegram_message
-            )
-
-            print(f"✅ NEWS #{index + 1} SENT")
-
-            # avoid telegram flood limit
-            time.sleep(5)
-
-        except Exception as e:
-
-            print(f"\nERROR SENDING NEWS #{index + 1}")
-            print(e)
-
-    print("\n✅ ALL TOP NEWS SENT")
+    print("✅ DONE")
 
 else:
+    print("❌ No viral news found")
 
     print("\n❌ NO VIRAL NEWS FOUND")
