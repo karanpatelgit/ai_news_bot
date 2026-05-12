@@ -90,6 +90,35 @@ def send_telegram_message(message):
         print(e)
 
 # =========================================================
+# SHORT LINK FUNCTION
+# =========================================================
+
+def shorten_url(long_url):
+
+    try:
+
+        api_url = (
+            f"https://is.gd/create.php?format=simple&url={long_url}"
+        )
+
+        response = requests.get(
+            api_url,
+            timeout=10
+        )
+
+        if response.status_code == 200:
+
+            return response.text.strip()
+
+        return long_url
+
+    except Exception as e:
+
+        print("\nSHORT LINK ERROR:")
+        print(e)
+
+        return long_url
+# =========================================================
 # RSS NEWS FEEDS
 # =========================================================
 
@@ -375,6 +404,7 @@ if not results_df.empty:
 🚀 VIRALITY:
 {row['virality_score']}/10
 """)
+short_link = shorten_url(row['link'])
 
     # =====================================================
     # SEND BEST NEWS TO TELEGRAM
@@ -396,7 +426,7 @@ for i, row in results_df.iterrows():
 ⚠️ Toxicity: {row['toxicity_score']}/10
 
 🔗 Link:
-{row['link']}
+{short_link}
 
 ==========================
 
