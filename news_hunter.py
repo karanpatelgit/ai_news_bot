@@ -296,7 +296,7 @@ HASHTAGS:
         # =====================================================
 
         if (
-            final_score >= 3
+            final_score >= 3 or virality_score >= 4 or emotion_score >=5
         ):
 
             print("\n✅ HIGH VIRAL POTENTIAL DETECTED")
