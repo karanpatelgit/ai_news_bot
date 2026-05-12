@@ -235,15 +235,11 @@ Then continue with:
 HOOK:
 (one ultra-viral opening line)
 
-SHORT REEL SCRIPT:
-(4-6 powerful lines)
+HINDI FACEBOOK ARTICLE:
+(Write a professional (in 150-350 words) yet engaging Facebook post based on the following AI news: [Insert Fetched News Summary]. Start with a bold, attention-grabbing headline using emojis. Summarize the news in 5-10 bullet points, explaining why this matters for the average person or society. End with a strong Call-to-Action (CTA) like 'What do you think about this shift?' or 'Read the full breakdown here:')
 
 ENDING CTA:
 (one audience engagement line)
-
-HINDI FACEBOOK ARTICLE:
-(simple emotional spoken Hindi but lenghty  script for maximum emotional impact and starts with creative hook )
-
 HASHTAGS:
 (only trending hashtags)
 """
