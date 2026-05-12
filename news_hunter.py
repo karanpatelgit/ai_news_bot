@@ -86,6 +86,36 @@ def send_telegram_message(message):
         print(e)
 
 # =========================================================
+# SHORT LINK FUNCTION
+# =========================================================
+
+def shorten_url(long_url):
+
+    try:
+
+        api_url = f"https://tinyurl.com/api-create.php?url={long_url}"
+
+        response = requests.get(
+            api_url,
+            timeout=20
+        )
+
+        if response.status_code == 200:
+
+            return response.text
+
+        else:
+
+            return long_url
+
+    except Exception as e:
+
+        print("\nSHORT LINK ERROR:")
+        print(e)
+
+        return long_url
+
+# =========================================================
 # RSS FEEDS
 # =========================================================
 
@@ -352,6 +382,11 @@ if not results_df.empty:
 
         try:
 
+            # CREATE SHORT LINK
+            short_link = shorten_url(
+                row['link']
+            )
+
             telegram_message = f"""
 🔥 VIRAL NEWS #{index + 1}
 
@@ -371,7 +406,7 @@ if not results_df.empty:
 {row['toxicity_score']}/10
 
 🔗 LINK:
-{row['link']}
+{short_link}
 
 ━━━━━━━━━━━━━━━━━━
 
