@@ -176,7 +176,7 @@ for index, row in df.iterrows():
     print("=" * 80)
 
     prompt = f"""
-You are a world-class viral content strategist,
+You are a world-class viral content strategist, facebook article writer,
 Instagram reel expert,
 YouTube Shorts expert,
 and emotional storytelling analyst.
@@ -193,7 +193,7 @@ Your job:
 - detect controversy
 - detect shareability
 
-Avoid boring analysis.
+Avoid boring analysis.(don't mention your explanations )
 
 Give scores STRICTLY in this format:
 
@@ -212,11 +212,8 @@ SHORT REEL SCRIPT:
 ENDING CTA:
 (one audience engagement line)
 
-HINDI REEL SCRIPT:
-(simple emotional spoken Hindi but lenghty  script for maximum emotional impact)
-
-CAPTION:
-(short emotional caption)
+HINDI FACEBOOK ARTICLE:
+(simple emotional spoken Hindi but lenghty  script for maximum emotional impact and starts with creative hook )
 
 HASHTAGS:
 (only trending hashtags)
@@ -382,44 +379,35 @@ if not results_df.empty:
     # =====================================================
     # SEND BEST NEWS TO TELEGRAM
     # =====================================================
+print("\n========== SENDING ALL TOP VIRAL NEWS ==========\n")
 
-    best_news = results_df.iloc[0]
+for i, row in results_df.iterrows():
 
     telegram_message = f"""
-🔥 TOP VIRAL NEWS ALERT 🔥
+🔥 VIRAL NEWS #{i+1}
 
-📰 {best_news['headline']}
+📰 {row['headline']}
 
-📂 Category:
-{best_news['category']}
+📂 Category: {row['category']}
 
-📈 Final Viral Score:
-{best_news['final_score']}
-
-❤️ Emotion Score:
-{best_news['emotion_score']}/10
-
-🚀 Virality Score:
-{best_news['virality_score']}/10
-
-⚠️ Toxicity:
-{best_news['toxicity_score']}/10
+📈 Viral Score: {row['final_score']}
+❤️ Emotion: {row['emotion_score']}/10
+🚀 Virality: {row['virality_score']}/10
+⚠️ Toxicity: {row['toxicity_score']}/10
 
 🔗 Link:
-{best_news['link']}
+{row['link']}
 
 ==========================
 
-{best_news['ai_analysis'][:3500]}
+{row['ai_analysis'][:2000]}
 """
 
-    print("\n========== SENDING TO TELEGRAM ==========\n")
+    send_telegram_message(telegram_message)
 
-    send_telegram_message(
-        telegram_message
-    )
+    print(f"✅ Sent news #{i+1}")
 
-    print("\n✅ BEST VIRAL NEWS SENT TO TELEGRAM")
+    time.sleep(3)  # avoid Telegram flood limit
 
     print("\n✅ CSV SAVED:")
     print(csv_path)
