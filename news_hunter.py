@@ -123,20 +123,31 @@ def shorten_url(long_url):
 # =========================================================
 
 RSS_FEEDS = {
+    # Existing feeds
     "India":
-    "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
-
+        "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
     "Technology":
-    "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
-
+        "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
     "World":
-    "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
-
+        "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
     "Business":
-    "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en",
-
+        "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en",
     "Entertainment":
-    "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-IN&gl=IN&ceid=IN:en"
+        "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-IN&gl=IN&ceid=IN:en",
+
+    # Local feeds
+    "Gorakhpur":
+        "https://news.google.com/rss/headlines/section/geo/Gorakhpur?hl=en-IN&gl=IN&ceid=IN:en",
+    "Kushinagar":
+        "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en",
+    "Uttar Pradesh":
+        "https://news.google.com/rss/headlines/section/geo/Uttar+Pradesh?hl=en-IN&gl=IN&ceid=IN:en",
+
+    # Search-based feeds (broader coverage, up to 100 items)
+    "Gorakhpur Search":
+        "https://news.google.com/rss/search?q=Gorakhpur&hl=en-IN&gl=IN&ceid=IN:en",
+    "Kushinagar Search":
+        "https://news.google.com/rss/search?q=Kushinagar&hl=en-IN&gl=IN&ceid=IN:en",
 }
 
 # =========================================================
@@ -155,7 +166,7 @@ for category, url in RSS_FEEDS.items():
 
         feed = feedparser.parse(url)
 
-        for entry in feed.entries[:5]:
+        for entry in feed.entries[:10]:
 
             all_news.append({
                 "category": category,
@@ -241,7 +252,11 @@ HINDI FACEBOOK ARTICLE:
 ENDING CTA:
 (one audience engagement line)
 HASHTAGS:
-(only trending hashtags)
+(only trending hashtags + #karanpatelkushianagr)
+
+SOCIAL MEDIA IMAGE PROMPT:
+( ONE SPECIAL PROMPT TO GENERATE SOCIAL MEDIA NEWS POSTER IMAGE WITH MENTIONING IMAGE DETAILS AND INFO AND BRANDING AT THE END AS - KARAN PATEL KUSHINAGAR AND ALSO MENTION CTA + LIKE ,SHARE AND FOLLOW)
+
 """
 
     try:
