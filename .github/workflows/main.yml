@@ -3,7 +3,7 @@ name: News Hunter Bot
 on:
   workflow_dispatch:   # manual run button
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes (change if needed)
+    - cron: "*/59 * * * *"   # every 59 MINUTES
 
 jobs:
   run-bot:
