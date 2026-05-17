@@ -713,7 +713,7 @@ SOCIAL MEDIA IMAGE PROMPT:
 
         print("Final:", final_score)
 
-        if final_score >= 3:
+        if final_score >= 5:
 
             results.append({
 
