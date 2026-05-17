@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
   schedule:
-    # EVERY 59 MINUTES
     - cron: "*/59 * * * *"
 
 jobs:
@@ -51,10 +50,12 @@ jobs:
             python-dotenv \
             openai \
             huggingface_hub \
-            trafilatura
+            trafilatura \
+            beautifulsoup4 \
+            lxml
 
       # ===================================================
-      # DEBUG INFO
+      # SHOW DEBUG INFO
       # ===================================================
 
       - name: Show Runtime Info
@@ -63,9 +64,6 @@ jobs:
 
           echo "========== PYTHON VERSION =========="
           python --version
-
-          echo "========== INSTALLED PACKAGES =========="
-          pip list
 
           echo "========== CURRENT UTC TIME =========="
           date -u
@@ -95,7 +93,7 @@ jobs:
           python news_hunter.py
 
       # ===================================================
-      # UPLOAD CSV FILE
+      # UPLOAD CSV
       # ===================================================
 
       - name: Upload CSV Artifact
