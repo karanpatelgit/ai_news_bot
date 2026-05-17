@@ -1,63 +1,106 @@
 name: News Hunter Bot
 
 on:
-  workflow_dispatch:   # manual run button
+  workflow_dispatch:
+
   schedule:
-    - cron: "*/59 * * * *"   # every 59 MINUTES
+    - cron: "*/59 * * * *"
 
 jobs:
+
   run-bot:
+
     runs-on: ubuntu-latest
 
+    timeout-minutes: 30
+
     steps:
-      # ===============================
-      # 1. Checkout latest code
-      # ===============================
+
+      # ===================================================
+      # CHECKOUT CODE
+      # ===================================================
+
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # ===============================
-      # 2. Setup Python
-      # ===============================
+      # ===================================================
+      # SETUP PYTHON
+      # ===================================================
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # ===============================
-      # 3. Install dependencies
-      # ===============================
+      # ===================================================
+      # INSTALL DEPENDENCIES
+      # ===================================================
+
       - name: Install Dependencies
         run: |
-              python -m pip install --upgrade pip
-              pip install \
-                feedparser \
-                pandas \
-                requests \
-                python-dotenv \
-                openai \
-                huggingface_hub
-      # ===============================
-      # 4. Debug commit info (IMPORTANT)
-      # ===============================
-      - name: Show Commit Info
-        run: |
-          echo "=== GITHUB CONTEXT ==="
-          git log -1
-          echo "======================="
+          python -m pip install --upgrade pip
 
-      # ===============================
-      # 5. Run bot
-      # ===============================
-      - name: Run News Bot
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          SAMBANOVA_API_KEY: ${{ secrets.SAMBANOVA_API_KEY }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}CHAT_ID }}
+          pip install \
+            feedparser \
+            pandas \
+            requests \
+            python-dotenv \
+            openai \
+            huggingface_hub
+
+      # ===================================================
+      # DEBUG INFO
+      # ===================================================
+
+      - name: Show Runtime Info
         run: |
-          echo "🔥 STARTING NEWS BOT"
+          echo "========== PYTHON VERSION =========="
+          python --version
+
+          echo "========== INSTALLED PACKAGES =========="
+          pip list
+
+          echo "========== CURRENT TIME =========="
+          date
+
+      # ===================================================
+      # RUN NEWS BOT
+      # ===================================================
+
+      - name: Run News Hunter Bot
+
+        env:
+
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+          SAMBANOVA_API_KEY: ${{ secrets.SAMBANOVA_API_KEY }}
+
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+        run: |
+
+          echo "🔥 STARTING NEWS HUNTER BOT"
+
           python news_hunter.py
+
+      # ===================================================
+      # UPLOAD CSV RESULT
+      # ===================================================
+
+      - name: Upload Viral News CSV
+
+        uses: actions/upload-artifact@v4
+
+        if: always()
+
+        with:
+
+          name: viral-news-csv
+
+          path: viral_reel_news.csv
+
+          if-no-files-found: ignore
