@@ -614,20 +614,12 @@ Emotion Score: number/10
 Virality Score: number/10
 Political Toxicity: number/10
 
-HOOK:
-(one viral line)
-
 HINDI FACEBOOK ARTICLE:
-(150-550 words detailed Hindi article)
-
-ENDING CTA:
-(one engagement line in hindi)
+(one viral line hook with italic font and 150-550 words detailed Hindi article and ENDING CTA:one engagement line in hindi)
 
 HASHTAGS:
 (viral english hashtags only + #karanpatelkushinagar)
 
-SOCIAL MEDIA IMAGE PROMPT:
-(Create detailed 1080x1350 poster prompt with brading Karan Patel Kushinagar)
 """
 
     try:
@@ -743,7 +735,7 @@ if not results_df.empty:
         )
 
         telegram_message = f"""
-🔥 VIRAL NEWS #{i+1}
+🔥 VIRAL NEWS  #{i+1}
 
 📰 {row['headline']}
 
@@ -777,4 +769,3 @@ else:
 
     print("\n❌ NO HIGH VIRAL NEWS FOUND")
 
-"""
