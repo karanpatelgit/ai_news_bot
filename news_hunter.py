@@ -7,6 +7,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from openai import OpenAI
+from huggingface_hub import InferenceClient
+
 import os
 import time
 import re
@@ -49,8 +51,6 @@ if missing:
 Missing environment variables:
 
 {', '.join(missing)}
-
-Create .env file in same folder as script.
 """
     )
 
@@ -63,7 +63,7 @@ print("BOT_TOKEN:", bool(BOT_TOKEN))
 print("CHAT_ID:", bool(CHAT_ID))
 
 # =========================================================
-# AI PROVIDERS
+# AI CLIENTS
 # =========================================================
 
 groq_client = None
@@ -71,7 +71,7 @@ samba_client = None
 hf_client = None
 
 # =========================================================
-# GROQ
+# GROQ CLIENT
 # =========================================================
 
 if GROQ_API_KEY:
@@ -90,7 +90,7 @@ if GROQ_API_KEY:
         print("❌ GROQ INIT ERROR:", e)
 
 # =========================================================
-# SAMBANOVA
+# SAMBANOVA CLIENT
 # =========================================================
 
 if SAMBANOVA_API_KEY:
@@ -109,14 +109,12 @@ if SAMBANOVA_API_KEY:
         print("❌ SAMBANOVA INIT ERROR:", e)
 
 # =========================================================
-# HUGGING FACE FALLBACK
+# HUGGING FACE CLIENT
 # =========================================================
 
 if HF_TOKEN:
 
     try:
-
-        from huggingface_hub import InferenceClient
 
         hf_client = InferenceClient(
             token=HF_TOKEN
@@ -129,6 +127,29 @@ if HF_TOKEN:
         print("❌ HF INIT ERROR:", e)
 
 # =========================================================
+# MODEL FALLBACK LISTS
+# =========================================================
+
+GROQ_MODELS = [
+
+    "llama-3.3-70b-versatile",
+
+    "llama-3.1-8b-instant"
+]
+
+SAMBANOVA_MODELS = [
+
+    "Meta-Llama-3.3-70B-Instruct"
+]
+
+HF_MODELS = [
+
+    "meta-llama/Meta-Llama-3-8B-Instruct",
+
+    "mistralai/Mistral-7B-Instruct-v0.2"
+]
+
+# =========================================================
 # TELEGRAM FUNCTION
 # =========================================================
 
@@ -137,15 +158,20 @@ def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
     payload = {
+
         "chat_id": CHAT_ID,
+
         "text": message[:4000]
     }
 
     try:
 
         response = requests.post(
+
             url,
+
             data=payload,
+
             timeout=30
         )
 
@@ -154,11 +180,11 @@ def send_telegram_message(message):
 
     except Exception as e:
 
-        print("\nTELEGRAM ERROR:")
+        print("\n❌ TELEGRAM ERROR:")
         print(e)
 
 # =========================================================
-# SHORT URL
+# SHORT LINK
 # =========================================================
 
 def shorten_url(long_url):
@@ -170,7 +196,9 @@ def shorten_url(long_url):
         )
 
         response = requests.get(
+
             api_url,
+
             timeout=10
         )
 
@@ -182,7 +210,7 @@ def shorten_url(long_url):
 
     except Exception as e:
 
-        print("\nSHORT LINK ERROR:")
+        print("\n❌ SHORT LINK ERROR:")
         print(e)
 
         return long_url
@@ -196,8 +224,11 @@ def extract_real_url(google_link):
     try:
 
         response = requests.get(
+
             google_link,
+
             allow_redirects=True,
+
             timeout=10
         )
 
@@ -205,113 +236,121 @@ def extract_real_url(google_link):
 
     except Exception as e:
 
-        print("\nREAL URL ERROR:")
+        print("\n❌ REAL URL ERROR:")
         print(e)
 
         return google_link
 
 # =========================================================
-# AI RESPONSE FUNCTION
+# AI GENERATION FUNCTION
 # =========================================================
 
 def generate_ai_response(prompt):
 
     # =====================================================
-    # 1. TRY GROQ
+    # TRY GROQ MODELS
     # =====================================================
 
     if groq_client:
 
-        try:
+        for model_name in GROQ_MODELS:
 
-            print("\n🔥 USING GROQ")
+            try:
 
-            response = groq_client.chat.completions.create(
+                print(f"\n🔥 USING GROQ MODEL: {model_name}")
 
-                model="llama3-70b-8192",
+                response = groq_client.chat.completions.create(
 
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
+                    model=model_name,
 
-                temperature=0.8,
-                max_tokens=700
-            )
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
 
-            return response.choices[0].message.content
+                    temperature=0.8,
 
-        except Exception as e:
+                    max_tokens=700
+                )
 
-            print("\n❌ GROQ ERROR:")
-            print(e)
+                return response.choices[0].message.content
+
+            except Exception as e:
+
+                print(f"\n❌ GROQ MODEL FAILED: {model_name}")
+                print(e)
 
     # =====================================================
-    # 2. TRY SAMBANOVA
+    # TRY SAMBANOVA MODELS
     # =====================================================
 
     if samba_client:
 
-        try:
+        for model_name in SAMBANOVA_MODELS:
 
-            print("\n🔥 USING SAMBANOVA")
+            try:
 
-            response = samba_client.chat.completions.create(
+                print(f"\n🔥 USING SAMBANOVA MODEL: {model_name}")
 
-                model="Meta-Llama-3.1-70B-Instruct",
+                response = samba_client.chat.completions.create(
 
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
+                    model=model_name,
 
-                temperature=0.8,
-                max_tokens=700
-            )
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
 
-            return response.choices[0].message.content
+                    temperature=0.8,
 
-        except Exception as e:
+                    max_tokens=700
+                )
 
-            print("\n❌ SAMBANOVA ERROR:")
-            print(e)
+                return response.choices[0].message.content
+
+            except Exception as e:
+
+                print(f"\n❌ SAMBANOVA MODEL FAILED: {model_name}")
+                print(e)
 
     # =====================================================
-    # 3. TRY HUGGING FACE
+    # TRY HUGGING FACE MODELS
     # =====================================================
 
     if hf_client:
 
-        try:
+        for model_name in HF_MODELS:
 
-            print("\n🔥 USING HUGGING FACE")
+            try:
 
-            response = hf_client.chat_completion(
+                print(f"\n🔥 USING HF MODEL: {model_name}")
 
-                model="meta-llama/Meta-Llama-3-8B-Instruct",
+                response = hf_client.chat_completion(
 
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
+                    model=model_name,
 
-                max_tokens=700
-            )
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
 
-            return response.choices[0].message.content
+                    max_tokens=700
+                )
 
-        except Exception as e:
+                return response.choices[0].message.content
 
-            print("\n❌ HUGGING FACE ERROR:")
-            print(e)
+            except Exception as e:
 
-    return "AI generation failed."
+                print(f"\n❌ HF MODEL FAILED: {model_name}")
+                print(e)
+
+    return "AI GENERATION FAILED"
 
 # =========================================================
 # RSS FEEDS
@@ -338,7 +377,10 @@ RSS_FEEDS = {
         "https://news.google.com/rss/headlines/section/geo/Gorakhpur?hl=en-IN&gl=IN&ceid=IN:en",
 
     "Kushinagar":
-        "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en"
+        "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en",
+
+    "Uttar Pradesh":
+        "https://news.google.com/rss/headlines/section/geo/Uttar+Pradesh?hl=en-IN&gl=IN&ceid=IN:en"
 }
 
 # =========================================================
@@ -375,7 +417,7 @@ for category, url in RSS_FEEDS.items():
 
                 difference = now - published_date
 
-                # TODAY + YESTERDAY ONLY
+                # ONLY TODAY + YESTERDAY
                 if difference <= timedelta(days=2):
 
                     all_news.append({
@@ -389,11 +431,11 @@ for category, url in RSS_FEEDS.items():
 
             except Exception as e:
 
-                print("DATE FILTER ERROR:", e)
+                print("❌ DATE FILTER ERROR:", e)
 
     except Exception as e:
 
-        print(f"Error fetching {category}")
+        print(f"❌ ERROR FETCHING {category}")
         print(e)
 
 # =========================================================
@@ -402,26 +444,42 @@ for category, url in RSS_FEEDS.items():
 
 df = pd.DataFrame(all_news)
 
+if df.empty:
+
+    print("\n❌ NO NEWS FOUND")
+    exit()
+
+# =========================================================
+# REMOVE DUPLICATES
+# =========================================================
+
 df["headline_clean"] = (
+
     df["headline"]
+
     .str.lower()
+
     .str.strip()
 )
 
 df.drop_duplicates(
+
     subset=["headline_clean"],
+
     inplace=True
 )
 
 df.drop(
+
     columns=["headline_clean"],
+
     inplace=True
 )
 
 print("\nTOTAL UNIQUE NEWS:", len(df))
 
 # =========================================================
-# RESULTS
+# RESULTS STORAGE
 # =========================================================
 
 results = []
@@ -435,7 +493,9 @@ print("\n========== AI VIRAL ANALYSIS STARTED ==========\n")
 for index, row in df.iterrows():
 
     headline = row["headline"]
+
     category = row["category"]
+
     link = row["link"]
 
     print("\n" + "=" * 80)
@@ -495,22 +555,28 @@ SOCIAL MEDIA IMAGE PROMPT:
         print("\n========== AI RESPONSE ==========\n")
         print(ai_result)
 
-        # =====================================================
+        # =================================================
         # EXTRACT SCORES
-        # =====================================================
+        # =================================================
 
         emotion_match = re.search(
+
             r"Emotion Score:\s*(\d+)",
+
             ai_result
         )
 
         virality_match = re.search(
+
             r"Virality Score:\s*(\d+)",
+
             ai_result
         )
 
         toxicity_match = re.search(
+
             r"Political Toxicity:\s*(\d+)",
+
             ai_result
         )
 
@@ -526,27 +592,34 @@ SOCIAL MEDIA IMAGE PROMPT:
             toxicity_match.group(1)
         ) if toxicity_match else 0
 
-        # =====================================================
+        # =================================================
         # FINAL SCORE
-        # =====================================================
+        # =================================================
 
         final_score = (
+
             virality_score * 0.5 +
+
             emotion_score * 0.35 -
+
             toxicity_score * 0.15
         )
 
         final_score = round(final_score, 2)
 
         print("\n========== SCORES ==========")
+
         print("Emotion Score:", emotion_score)
+
         print("Virality Score:", virality_score)
+
         print("Political Toxicity:", toxicity_score)
+
         print("Final Viral Score:", final_score)
 
-        # =====================================================
+        # =================================================
         # FILTER
-        # =====================================================
+        # =================================================
 
         if final_score >= 3:
 
@@ -579,7 +652,7 @@ SOCIAL MEDIA IMAGE PROMPT:
 
     except Exception as e:
 
-        print("\nAI ERROR:")
+        print("\n❌ AI ERROR:")
         print(e)
 
 # =========================================================
@@ -591,19 +664,26 @@ results_df = pd.DataFrame(results)
 if not results_df.empty:
 
     results_df = results_df.sort_values(
+
         by="final_score",
+
         ascending=False
     )
 
+    # TOP 10 ONLY
     results_df = results_df.head(10)
 
     csv_path = os.path.join(
+
         SCRIPT_DIR,
+
         "viral_reel_news.csv"
     )
 
     results_df.to_csv(
+
         csv_path,
+
         index=False
     )
 
@@ -643,8 +723,16 @@ if not results_df.empty:
             telegram_message
         )
 
-        print(f"✅ Sent news #{i+1}")
+        print(f"✅ SENT NEWS #{i+1}")
 
+        time.sleep(3)
+
+    print("\n✅ CSV SAVED:")
+    print(csv_path)
+
+else:
+
+    print("\n❌ NO HIGH VIRAL NEWS FOUND")
         time.sleep(3)
 
     print("\n✅ CSV SAVED:")
@@ -671,3 +759,5 @@ else:
 
     print("\n❌ NO HIGH-VIRAL NEWS FOUND")
 """
+
+
