@@ -601,6 +601,7 @@ Instagram reel expert,
 and emotional storytelling analyst.
 
 Analyze this news carefully.
+(aviod boring scoring explanation just give the scores)
 
 HEADLINE:
 {headline}
@@ -618,16 +619,16 @@ HOOK:
 (one viral line)
 
 HINDI FACEBOOK ARTICLE:
-(150-350 words detailed Hindi article)
+(150-550 words detailed Hindi article)
 
 ENDING CTA:
-(one engagement line)
+(one engagement line in hindi)
 
 HASHTAGS:
 (viral english hashtags only + #karanpatelkushinagar)
 
 SOCIAL MEDIA IMAGE PROMPT:
-(Create detailed 1080x1350 poster prompt)
+(Create detailed 1080x1350 poster prompt with brading Karan Patel Kushinagar)
 """
 
     try:
