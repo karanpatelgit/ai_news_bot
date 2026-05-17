@@ -600,7 +600,7 @@ Instagram reel expert,
 and emotional storytelling analyst.
 
 Analyze this news carefully.
-(aviod boring scoring explanation just give the scores)
+(aviod boring scoring ! Don't explanation anythhing aboout scoring just give the scores)
 
 HEADLINE:
 {headline}
@@ -752,6 +752,23 @@ if not results_df.empty:
 ==========================
 
 {row['ai_analysis'][:2500]}
+
+==========================
+
+📲 FOLLOW KARAN PATEL KUSHINAGAR ON :
+
+📸 Instagram:
+https://www.instagram.com/karan_patel_kushinagar
+
+▶️ YouTube:
+https://youtube.com/@karan_patel_kushinagar
+
+📘 Facebook:
+https://www.facebook.com/share/1D627R2qFV/
+
+📲 WHATSAPP BRODCAST:
+https://whatsapp.com/channel/0029Vb6Aycg3AzNOqOekVE0S
+
 """
 
         send_telegram_message(
