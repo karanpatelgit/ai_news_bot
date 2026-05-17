@@ -4,20 +4,21 @@ on:
   workflow_dispatch:
 
   schedule:
+    # EVERY 59 MINUTES
     - cron: "*/59 * * * *"
 
 jobs:
 
-  run-bot:
+  run-news-bot:
 
     runs-on: ubuntu-latest
 
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
 
       # ===================================================
-      # CHECKOUT CODE
+      # CHECKOUT REPOSITORY
       # ===================================================
 
       - name: Checkout Repository
@@ -29,6 +30,7 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v5
+
         with:
           python-version: "3.10"
 
@@ -37,7 +39,9 @@ jobs:
       # ===================================================
 
       - name: Install Dependencies
+
         run: |
+
           python -m pip install --upgrade pip
 
           pip install \
@@ -46,25 +50,28 @@ jobs:
             requests \
             python-dotenv \
             openai \
-            huggingface_hub
+            huggingface_hub \
+            trafilatura
 
       # ===================================================
       # DEBUG INFO
       # ===================================================
 
       - name: Show Runtime Info
+
         run: |
+
           echo "========== PYTHON VERSION =========="
           python --version
 
           echo "========== INSTALLED PACKAGES =========="
           pip list
 
-          echo "========== CURRENT TIME =========="
-          date
+          echo "========== CURRENT UTC TIME =========="
+          date -u
 
       # ===================================================
-      # RUN NEWS BOT
+      # RUN BOT
       # ===================================================
 
       - name: Run News Hunter Bot
@@ -88,10 +95,10 @@ jobs:
           python news_hunter.py
 
       # ===================================================
-      # UPLOAD CSV RESULT
+      # UPLOAD CSV FILE
       # ===================================================
 
-      - name: Upload Viral News CSV
+      - name: Upload CSV Artifact
 
         uses: actions/upload-artifact@v4
 
@@ -99,8 +106,9 @@ jobs:
 
         with:
 
-          name: viral-news-csv
+          name: viral-news-results
 
           path: viral_reel_news.csv
 
           if-no-files-found: ignore
+          
