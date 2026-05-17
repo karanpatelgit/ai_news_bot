@@ -1,13 +1,10 @@
-# =========================================================
-# NEWS HUNTER BOT (FULL ARTICLE AI VERSION)
-# =========================================================
-
 import feedparser
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from openai import OpenAI
 from huggingface_hub import InferenceClient
+from bs4 import BeautifulSoup
 
 import trafilatura
 import os
@@ -23,18 +20,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 load_dotenv()
 
-# =========================================================
-# TOKENS
-# =========================================================
-
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
 SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY")
-
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 missing = []
@@ -60,6 +50,8 @@ print("\n========== ENV VARIABLES LOADED ==========")
 print("GROQ:", bool(GROQ_API_KEY))
 print("SAMBANOVA:", bool(SAMBANOVA_API_KEY))
 print("HF:", bool(HF_TOKEN))
+print("BOT_TOKEN:", bool(BOT_TOKEN))
+print("CHAT_ID:", bool(CHAT_ID))
 
 # =========================================================
 # AI CLIENTS
@@ -78,9 +70,7 @@ if GROQ_API_KEY:
     try:
 
         groq_client = OpenAI(
-
             api_key=GROQ_API_KEY,
-
             base_url="https://api.groq.com/openai/v1"
         )
 
@@ -99,9 +89,7 @@ if SAMBANOVA_API_KEY:
     try:
 
         samba_client = OpenAI(
-
             api_key=SAMBANOVA_API_KEY,
-
             base_url="https://api.sambanova.ai/v1"
         )
 
@@ -112,7 +100,7 @@ if SAMBANOVA_API_KEY:
         print("❌ SAMBANOVA INIT ERROR:", e)
 
 # =========================================================
-# HUGGING FACE CLIENT
+# HF CLIENT
 # =========================================================
 
 if HF_TOKEN:
@@ -134,24 +122,20 @@ if HF_TOKEN:
 # =========================================================
 
 GROQ_MODELS = [
-
     "llama-3.3-70b-versatile",
-
     "llama-3.1-8b-instant"
 ]
 
 SAMBANOVA_MODELS = [
-
     "Meta-Llama-3.3-70B-Instruct"
 ]
 
 HF_MODELS = [
-
     "meta-llama/Meta-Llama-3-8B-Instruct"
 ]
 
 # =========================================================
-# TELEGRAM
+# TELEGRAM FUNCTION
 # =========================================================
 
 def send_telegram_message(message):
@@ -168,11 +152,8 @@ def send_telegram_message(message):
     try:
 
         response = requests.post(
-
             url,
-
             data=payload,
-
             timeout=30
         )
 
@@ -185,7 +166,19 @@ def send_telegram_message(message):
         print(e)
 
 # =========================================================
-# SHORT LINK
+# CLEAN URL
+# =========================================================
+
+def clean_url(url):
+
+    try:
+        return url.split("&")[0]
+
+    except:
+        return url
+
+# =========================================================
+# SHORT URL
 # =========================================================
 
 def shorten_url(long_url):
@@ -193,13 +186,11 @@ def shorten_url(long_url):
     try:
 
         api_url = (
-            f"https://is.gd/create.php?format=simple&url={long_url}"
+            f"https://tinyurl.com/api-create.php?url={long_url}"
         )
 
         response = requests.get(
-
             api_url,
-
             timeout=10
         )
 
@@ -217,30 +208,50 @@ def shorten_url(long_url):
         return long_url
 
 # =========================================================
-# REAL URL
+# EXTRACT REAL URL
 # =========================================================
 
-def extract_real_url(google_link):
+def extract_real_url(google_url):
 
     try:
 
+        headers = {
+            "User-Agent":
+            "Mozilla/5.0"
+        }
+
         response = requests.get(
-
-            google_link,
-
-            allow_redirects=True,
-
-            timeout=10
+            google_url,
+            headers=headers,
+            timeout=15
         )
 
-        return response.url
+        soup = BeautifulSoup(
+            response.text,
+            "lxml"
+        )
+
+        canonical = soup.find(
+            "link",
+            rel="canonical"
+        )
+
+        if canonical and canonical.get("href"):
+
+            real_url = canonical["href"]
+
+            if "news.google.com" not in real_url:
+
+                return real_url
+
+        return google_url
 
     except Exception as e:
 
-        print("\n❌ REAL URL ERROR:")
+        print("\n❌ REAL URL EXTRACTION ERROR:")
         print(e)
 
-        return google_link
+        return google_url
 
 # =========================================================
 # FETCH FULL ARTICLE
@@ -256,11 +267,8 @@ def fetch_full_article(url):
             return None
 
         text = trafilatura.extract(
-
             downloaded,
-
             include_comments=False,
-
             include_tables=False
         )
 
@@ -401,11 +409,10 @@ def generate_ai_response(
                 print(e)
 
     # =====================================================
-    # FINAL FALLBACK
+    # FALLBACK
     # =====================================================
 
     print("\n⚠️ ALL AI FAILED")
-    print("⚠️ USING BASIC NEWS FORMAT")
 
     return f"""
 Emotion Score: 5/10
@@ -429,7 +436,7 @@ HASHTAGS:
 #BreakingNews #Trending #ViralNews #karanpatelkushinagar
 
 SOCIAL MEDIA IMAGE PROMPT:
-Create 1080x1350 breaking news social media poster with Hindi typography, viral news theme, CTA, and branding:
+Create 1080x1350 breaking news poster with Hindi typography and branding:
 KARAN PATEL KUSHINAGAR
 """
 
@@ -495,7 +502,7 @@ for category, url in RSS_FEEDS.items():
 
                 difference = now - published_date
 
-                # TODAY + YESTERDAY ONLY
+                # ONLY TODAY + YESTERDAY
                 if difference <= timedelta(days=2):
 
                     real_link = extract_real_url(
@@ -545,25 +552,18 @@ if df.empty:
 # =========================================================
 
 df["headline_clean"] = (
-
     df["headline"]
-
     .str.lower()
-
     .str.strip()
 )
 
 df.drop_duplicates(
-
     subset=["headline_clean"],
-
     inplace=True
 )
 
 df.drop(
-
     columns=["headline_clean"],
-
     inplace=True
 )
 
@@ -578,17 +578,14 @@ results = []
 print("\n========== AI ANALYSIS STARTED ==========\n")
 
 # =========================================================
-# ANALYZE
+# ANALYZE NEWS
 # =========================================================
 
 for index, row in df.iterrows():
 
     headline = row["headline"]
-
     category = row["category"]
-
     link = row["link"]
-
     article_text = row["article"]
 
     print("\n" + "=" * 80)
@@ -611,12 +608,6 @@ HEADLINE:
 FULL ARTICLE:
 {article_text}
 
-Your task:
-- detect emotional power
-- detect viral potential
-- detect controversy
-- detect audience curiosity
-
 STRICT FORMAT:
 
 Emotion Score: number/10
@@ -633,50 +624,36 @@ ENDING CTA:
 (one engagement line)
 
 HASHTAGS:
-(viral hashtags only + #karanpatelkushinagar)
+(viral english hashtags only + #karanpatelkushinagar)
 
 SOCIAL MEDIA IMAGE PROMPT:
-(Create detailed 1080x1350 social media poster prompt)
+(Create detailed 1080x1350 poster prompt)
 """
 
     try:
 
         ai_result = generate_ai_response(
-
             prompt,
-
             headline,
-
             category,
-
             article_text
         )
 
         print("\n========== AI RESPONSE ==========\n")
         print(ai_result)
 
-        # =================================================
-        # SCORE EXTRACTION
-        # =================================================
-
         emotion_match = re.search(
-
             r"Emotion Score:\s*(\d+)",
-
             ai_result
         )
 
         virality_match = re.search(
-
             r"Virality Score:\s*(\d+)",
-
             ai_result
         )
 
         toxicity_match = re.search(
-
             r"Political Toxicity:\s*(\d+)",
-
             ai_result
         )
 
@@ -693,25 +670,12 @@ SOCIAL MEDIA IMAGE PROMPT:
         ) if toxicity_match else 0
 
         final_score = (
-
             virality_score * 0.5 +
-
             emotion_score * 0.35 -
-
             toxicity_score * 0.15
         )
 
         final_score = round(final_score, 2)
-
-        print("\n========== SCORES ==========")
-
-        print("Emotion:", emotion_score)
-
-        print("Virality:", virality_score)
-
-        print("Toxicity:", toxicity_score)
-
-        print("Final:", final_score)
 
         if final_score >= 5:
 
@@ -722,8 +686,6 @@ SOCIAL MEDIA IMAGE PROMPT:
                 "headline": headline,
 
                 "link": link,
-
-                "article": article_text[:1500],
 
                 "emotion_score": emotion_score,
 
@@ -752,25 +714,19 @@ results_df = pd.DataFrame(results)
 if not results_df.empty:
 
     results_df = results_df.sort_values(
-
         by="final_score",
-
         ascending=False
     )
 
     results_df = results_df.head(10)
 
     csv_path = os.path.join(
-
         SCRIPT_DIR,
-
         "viral_reel_news.csv"
     )
 
     results_df.to_csv(
-
         csv_path,
-
         index=False
     )
 
@@ -778,8 +734,12 @@ if not results_df.empty:
 
     for i, row in results_df.iterrows():
 
-        short_link = shorten_url(
+        cleaned_link = clean_url(
             row["link"]
+        )
+
+        short_link = shorten_url(
+            cleaned_link
         )
 
         telegram_message = f"""
@@ -816,4 +776,3 @@ if not results_df.empty:
 else:
 
     print("\n❌ NO HIGH VIRAL NEWS FOUND")
-"""
