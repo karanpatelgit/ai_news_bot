@@ -435,9 +435,6 @@ ENDING CTA:
 HASHTAGS:
 #BreakingNews #Trending #ViralNews #karanpatelkushinagar
 
-SOCIAL MEDIA IMAGE PROMPT:
-Create 1080x1350 breaking news poster with Hindi typography and branding:
-KARAN PATEL KUSHINAGAR
 """
 
 # =========================================================
