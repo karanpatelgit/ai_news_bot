@@ -1,8 +1,12 @@
+# =========================================================
+# NEWS HUNTER BOT
+# =========================================================
+
 import feedparser
 import pandas as pd
-from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
+from openai import OpenAI
 import os
 import time
 import re
@@ -16,14 +20,21 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 load_dotenv()
 
+# =========================================================
+# API TOKENS
+# =========================================================
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY")
+
 HF_TOKEN = os.getenv("HF_TOKEN")
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 missing = []
-
-if not HF_TOKEN:
-    missing.append("HF_TOKEN")
 
 if not BOT_TOKEN:
     missing.append("TELEGRAM_BOT_TOKEN")
@@ -32,6 +43,7 @@ if not CHAT_ID:
     missing.append("TELEGRAM_CHAT_ID")
 
 if missing:
+
     raise RuntimeError(
         f"""
 Missing environment variables:
@@ -39,27 +51,82 @@ Missing environment variables:
 {', '.join(missing)}
 
 Create .env file in same folder as script.
-
-Example:
-
-HF_TOKEN=your_huggingface_token
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
 """
     )
 
 print("\n========== ENV VARIABLES LOADED ==========")
-print("HF_TOKEN:", bool(HF_TOKEN))
+
+print("GROQ:", bool(GROQ_API_KEY))
+print("SAMBANOVA:", bool(SAMBANOVA_API_KEY))
+print("HF:", bool(HF_TOKEN))
 print("BOT_TOKEN:", bool(BOT_TOKEN))
 print("CHAT_ID:", bool(CHAT_ID))
 
 # =========================================================
-# HUGGING FACE CLIENT
+# AI PROVIDERS
 # =========================================================
 
-client = InferenceClient(
-    token=HF_TOKEN
-)
+groq_client = None
+samba_client = None
+hf_client = None
+
+# =========================================================
+# GROQ
+# =========================================================
+
+if GROQ_API_KEY:
+
+    try:
+
+        groq_client = OpenAI(
+            api_key=GROQ_API_KEY,
+            base_url="https://api.groq.com/openai/v1"
+        )
+
+        print("✅ GROQ READY")
+
+    except Exception as e:
+
+        print("❌ GROQ INIT ERROR:", e)
+
+# =========================================================
+# SAMBANOVA
+# =========================================================
+
+if SAMBANOVA_API_KEY:
+
+    try:
+
+        samba_client = OpenAI(
+            api_key=SAMBANOVA_API_KEY,
+            base_url="https://api.sambanova.ai/v1"
+        )
+
+        print("✅ SAMBANOVA READY")
+
+    except Exception as e:
+
+        print("❌ SAMBANOVA INIT ERROR:", e)
+
+# =========================================================
+# HUGGING FACE FALLBACK
+# =========================================================
+
+if HF_TOKEN:
+
+    try:
+
+        from huggingface_hub import InferenceClient
+
+        hf_client = InferenceClient(
+            token=HF_TOKEN
+        )
+
+        print("✅ HUGGING FACE READY")
+
+    except Exception as e:
+
+        print("❌ HF INIT ERROR:", e)
 
 # =========================================================
 # TELEGRAM FUNCTION
@@ -71,7 +138,7 @@ def send_telegram_message(message):
 
     payload = {
         "chat_id": CHAT_ID,
-        "text": message[:4000]  # Telegram limit safety
+        "text": message[:4000]
     }
 
     try:
@@ -91,7 +158,7 @@ def send_telegram_message(message):
         print(e)
 
 # =========================================================
-# SHORT LINK FUNCTION
+# SHORT URL
 # =========================================================
 
 def shorten_url(long_url):
@@ -121,7 +188,7 @@ def shorten_url(long_url):
         return long_url
 
 # =========================================================
-# EXTRACT REAL ARTICLE URL
+# EXTRACT REAL URL
 # =========================================================
 
 def extract_real_url(google_link):
@@ -144,7 +211,110 @@ def extract_real_url(google_link):
         return google_link
 
 # =========================================================
-# RSS NEWS FEEDS
+# AI RESPONSE FUNCTION
+# =========================================================
+
+def generate_ai_response(prompt):
+
+    # =====================================================
+    # 1. TRY GROQ
+    # =====================================================
+
+    if groq_client:
+
+        try:
+
+            print("\n🔥 USING GROQ")
+
+            response = groq_client.chat.completions.create(
+
+                model="llama3-70b-8192",
+
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+
+                temperature=0.8,
+                max_tokens=700
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+
+            print("\n❌ GROQ ERROR:")
+            print(e)
+
+    # =====================================================
+    # 2. TRY SAMBANOVA
+    # =====================================================
+
+    if samba_client:
+
+        try:
+
+            print("\n🔥 USING SAMBANOVA")
+
+            response = samba_client.chat.completions.create(
+
+                model="Meta-Llama-3.1-70B-Instruct",
+
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+
+                temperature=0.8,
+                max_tokens=700
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+
+            print("\n❌ SAMBANOVA ERROR:")
+            print(e)
+
+    # =====================================================
+    # 3. TRY HUGGING FACE
+    # =====================================================
+
+    if hf_client:
+
+        try:
+
+            print("\n🔥 USING HUGGING FACE")
+
+            response = hf_client.chat_completion(
+
+                model="meta-llama/Meta-Llama-3-8B-Instruct",
+
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+
+                max_tokens=700
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+
+            print("\n❌ HUGGING FACE ERROR:")
+            print(e)
+
+    return "AI generation failed."
+
+# =========================================================
+# RSS FEEDS
 # =========================================================
 
 RSS_FEEDS = {
@@ -168,16 +338,7 @@ RSS_FEEDS = {
         "https://news.google.com/rss/headlines/section/geo/Gorakhpur?hl=en-IN&gl=IN&ceid=IN:en",
 
     "Kushinagar":
-        "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en",
-
-    "Uttar Pradesh":
-        "https://news.google.com/rss/headlines/section/geo/Uttar+Pradesh?hl=en-IN&gl=IN&ceid=IN:en",
-
-    "Gorakhpur Search":
-        "https://news.google.com/rss/search?q=Gorakhpur&hl=en-IN&gl=IN&ceid=IN:en",
-
-    "Kushinagar Search":
-        "https://news.google.com/rss/search?q=Kushinagar&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en"
 }
 
 # =========================================================
@@ -214,12 +375,15 @@ for category, url in RSS_FEEDS.items():
 
                 difference = now - published_date
 
-                # ONLY TODAY + YESTERDAY NEWS
+                # TODAY + YESTERDAY ONLY
                 if difference <= timedelta(days=2):
 
                     all_news.append({
+
                         "category": category,
+
                         "headline": entry.title,
+
                         "link": entry.link
                     })
 
@@ -238,7 +402,6 @@ for category, url in RSS_FEEDS.items():
 
 df = pd.DataFrame(all_news)
 
-# Better duplicate removal
 df["headline_clean"] = (
     df["headline"]
     .str.lower()
@@ -258,7 +421,7 @@ df.drop(
 print("\nTOTAL UNIQUE NEWS:", len(df))
 
 # =========================================================
-# RESULTS STORAGE
+# RESULTS
 # =========================================================
 
 results = []
@@ -300,7 +463,6 @@ Your job:
 - detect shareability
 
 Avoid boring analysis.
-(DON'T explain anything)
 
 Give scores STRICTLY in this format:
 
@@ -311,7 +473,7 @@ Political Toxicity: number/10
 Then continue with:
 
 HOOK:
-(one ultra-viral opening line in Hindi )
+(one ultra-viral opening line)
 
 HINDI FACEBOOK ARTICLE:
 (Write a professional engaging Facebook article in Hindi between 150-350 words)
@@ -323,31 +485,12 @@ HASHTAGS:
 (only trending hashtags + #karanpatelkushinagar)
 
 SOCIAL MEDIA IMAGE PROMPT:
-(Create detailed image prompt for 1080x1350 social media news poster with:
-- headline
-- visual elements
-- branding
-- CTA
-- Like Share Follow
-- KARAN PATEL KUSHINAGAR branding)
+(Create detailed image prompt for 1080x1350 social media poster)
 """
 
     try:
 
-        response = client.chat_completion(
-            model="meta-llama/Meta-Llama-3-8B-Instruct",
-
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-
-            max_tokens=700
-        )
-
-        ai_result = response.choices[0].message.content
+        ai_result = generate_ai_response(prompt)
 
         print("\n========== AI RESPONSE ==========\n")
         print(ai_result)
@@ -384,7 +527,7 @@ SOCIAL MEDIA IMAGE PROMPT:
         ) if toxicity_match else 0
 
         # =====================================================
-        # FINAL VIRAL SCORE
+        # FINAL SCORE
         # =====================================================
 
         final_score = (
@@ -402,7 +545,7 @@ SOCIAL MEDIA IMAGE PROMPT:
         print("Final Viral Score:", final_score)
 
         # =====================================================
-        # FILTER BEST NEWS ONLY
+        # FILTER
         # =====================================================
 
         if final_score >= 3:
@@ -430,7 +573,7 @@ SOCIAL MEDIA IMAGE PROMPT:
 
         else:
 
-            print("\n❌ REJECTED (LOW VIRAL POTENTIAL)")
+            print("\n❌ LOW VIRAL POTENTIAL")
 
         time.sleep(2)
 
@@ -440,14 +583,10 @@ SOCIAL MEDIA IMAGE PROMPT:
         print(e)
 
 # =========================================================
-# CREATE RESULTS DATAFRAME
+# FINAL RESULTS
 # =========================================================
 
 results_df = pd.DataFrame(results)
-
-# =========================================================
-# SAVE RESULTS
-# =========================================================
 
 if not results_df.empty:
 
@@ -456,7 +595,6 @@ if not results_df.empty:
         ascending=False
     )
 
-    # TOP 10 ONLY
     results_df = results_df.head(10)
 
     csv_path = os.path.join(
@@ -469,34 +607,12 @@ if not results_df.empty:
         index=False
     )
 
-    print("\n========== TOP VIRAL NEWS ==========\n")
-
-    for i, row in results_df.iterrows():
-
-        print(f"""
-🔥 HEADLINE:
-{row['headline']}
-
-📈 VIRAL SCORE:
-{row['final_score']}
-
-❤️ EMOTION:
-{row['emotion_score']}/10
-
-🚀 VIRALITY:
-{row['virality_score']}/10
-""")
-
-    # =====================================================
-    # SEND BEST NEWS TO TELEGRAM
-    # =====================================================
-
-    print("\n========== SENDING ALL TOP VIRAL NEWS ==========\n")
+    print("\n========== SENDING NEWS ==========\n")
 
     for i, row in results_df.iterrows():
 
         real_link = extract_real_url(
-            row['link']
+            row["link"]
         )
 
         short_link = shorten_url(
@@ -520,6 +636,23 @@ if not results_df.empty:
 
 ==========================
 
+{row['ai_analysis'][:2000]}
+"""
+
+        send_telegram_message(
+            telegram_message
+        )
+
+        print(f"✅ Sent news #{i+1}")
+
+        time.sleep(3)
+
+    print("\n✅ CSV SAVED:")
+    print(csv_path)
+
+else:
+
+    print("\n❌ NO HIGH VIRAL NEWS FOUND")
 {row['ai_analysis'][:2000]}
 """
 
