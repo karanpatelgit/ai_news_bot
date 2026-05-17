@@ -488,44 +488,46 @@ for category, url in RSS_FEEDS.items():
 
             try:
 
-                published = entry.get("published_parsed")
-
-                if not published:
-                    continue
-
-                published_date = datetime(
-                    *published[:6],
-                    tzinfo=timezone.utc
-                )
-
-                now = datetime.now(timezone.utc)
-
-                difference = now - published_date
-
-                # ONLY TODAY + YESTERDAY
-                if difference <= timedelta(days=2):
-
-                    real_link = extract_real_url(
-                        entry.link
-                    )
-
-                    article_text = fetch_full_article(
-                        real_link
-                    )
-
-                    if not article_text:
-                        article_text = entry.title
-
-                    all_news.append({
-
-                        "category": category,
-
-                        "headline": entry.title,
-
-                        "link": real_link,
-
-                        "article": article_text
-                    })
+                    published = entry.get("published_parsed")
+                    
+                    if not published:
+                        continue
+                    
+                    # Article publish date
+                    published_date = datetime(
+                        *published[:6]
+                    ).date()
+                    
+                    # Today's date (UTC)
+                    today = datetime.utcnow().date()
+                    
+                    # Yesterday's date
+                    yesterday = today - timedelta(days=1)
+                    
+                    # ONLY TODAY + YESTERDAY NEWS
+                    if published_date == today or published_date == yesterday:
+                    
+                        real_link = extract_real_url(
+                            entry.link
+                        )
+                    
+                        article_text = fetch_full_article(
+                            real_link
+                        )
+                    
+                        if not article_text:
+                            article_text = entry.title
+                    
+                        all_news.append({
+                    
+                            "category": category,
+                    
+                            "headline": entry.title,
+                    
+                            "link": real_link,
+                    
+                            "article": article_text
+                        })
 
             except Exception as e:
 
