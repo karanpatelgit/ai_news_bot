@@ -2,6 +2,7 @@ import feedparser
 import pandas as pd
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
 import os
 import time
 import re
@@ -70,7 +71,7 @@ def send_telegram_message(message):
 
     payload = {
         "chat_id": CHAT_ID,
-        "text": message
+        "text": message[:4000]  # Telegram limit safety
     }
 
     try:
@@ -118,34 +119,63 @@ def shorten_url(long_url):
         print(e)
 
         return long_url
+
+# =========================================================
+# EXTRACT REAL ARTICLE URL
+# =========================================================
+
+def extract_real_url(google_link):
+
+    try:
+
+        response = requests.get(
+            google_link,
+            allow_redirects=True,
+            timeout=10
+        )
+
+        return response.url
+
+    except Exception as e:
+
+        print("\nREAL URL ERROR:")
+        print(e)
+
+        return google_link
+
 # =========================================================
 # RSS NEWS FEEDS
 # =========================================================
 
 RSS_FEEDS = {
-    # Existing feeds
+
     "India":
         "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
+
     "Technology":
         "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
+
     "World":
         "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
+
     "Business":
         "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en",
+
     "Entertainment":
         "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-IN&gl=IN&ceid=IN:en",
 
-    # Local feeds
     "Gorakhpur":
         "https://news.google.com/rss/headlines/section/geo/Gorakhpur?hl=en-IN&gl=IN&ceid=IN:en",
+
     "Kushinagar":
         "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en",
+
     "Uttar Pradesh":
         "https://news.google.com/rss/headlines/section/geo/Uttar+Pradesh?hl=en-IN&gl=IN&ceid=IN:en",
 
-    # Search-based feeds (broader coverage, up to 100 items)
     "Gorakhpur Search":
         "https://news.google.com/rss/search?q=Gorakhpur&hl=en-IN&gl=IN&ceid=IN:en",
+
     "Kushinagar Search":
         "https://news.google.com/rss/search?q=Kushinagar&hl=en-IN&gl=IN&ceid=IN:en",
 }
@@ -166,13 +196,36 @@ for category, url in RSS_FEEDS.items():
 
         feed = feedparser.parse(url)
 
-        for entry in feed.entries[:10]:
+        for entry in feed.entries:
 
-            all_news.append({
-                "category": category,
-                "headline": entry.title,
-                "link": entry.link
-            })
+            try:
+
+                published = entry.get("published_parsed")
+
+                if not published:
+                    continue
+
+                published_date = datetime(
+                    *published[:6],
+                    tzinfo=timezone.utc
+                )
+
+                now = datetime.now(timezone.utc)
+
+                difference = now - published_date
+
+                # ONLY TODAY + YESTERDAY NEWS
+                if difference <= timedelta(days=2):
+
+                    all_news.append({
+                        "category": category,
+                        "headline": entry.title,
+                        "link": entry.link
+                    })
+
+            except Exception as e:
+
+                print("DATE FILTER ERROR:", e)
 
     except Exception as e:
 
@@ -185,8 +238,20 @@ for category, url in RSS_FEEDS.items():
 
 df = pd.DataFrame(all_news)
 
+# Better duplicate removal
+df["headline_clean"] = (
+    df["headline"]
+    .str.lower()
+    .str.strip()
+)
+
 df.drop_duplicates(
-    subset=["headline"],
+    subset=["headline_clean"],
+    inplace=True
+)
+
+df.drop(
+    columns=["headline_clean"],
     inplace=True
 )
 
@@ -216,7 +281,8 @@ for index, row in df.iterrows():
     print("=" * 80)
 
     prompt = f"""
-You are a world-class viral content strategist, facebook article writer,
+You are a world-class viral content strategist,
+facebook article writer,
 Instagram reel expert,
 YouTube Shorts expert,
 and emotional storytelling analyst.
@@ -233,7 +299,8 @@ Your job:
 - detect controversy
 - detect shareability
 
-Avoid boring analysis.(don't mention your explanations )
+Avoid boring analysis.
+(DON'T explain anything)
 
 Give scores STRICTLY in this format:
 
@@ -244,19 +311,25 @@ Political Toxicity: number/10
 Then continue with:
 
 HOOK:
-(one ultra-viral opening line)
+(one ultra-viral opening line in Hindi )
 
 HINDI FACEBOOK ARTICLE:
-(Write a professional (in 150-350 words) yet engaging Facebook post based on the following AI news: [Insert Fetched News Summary]. Start with a bold, attention-grabbing headline using emojis. Summarize the news in 5-10 bullet points, explaining why this matters for the average person or society. End with a strong Call-to-Action (CTA) like 'What do you think about this shift?' or 'Read the full breakdown here:')
+(Write a professional engaging Facebook article in Hindi between 150-350 words)
 
 ENDING CTA:
 (one audience engagement line)
+
 HASHTAGS:
-(only trending hashtags + #karanpatelkushianagr)
+(only trending hashtags + #karanpatelkushinagar)
 
 SOCIAL MEDIA IMAGE PROMPT:
-( RELATED PROMPT TO GENERATE SOCIAL MEDIA NEWS POSTER (SIZE: 1080 * 1350 PX )IMAGE WITH MENTIONING NEWS DETAILS AND INFO AND BRANDING AT THE END AS - KARAN PATEL KUSHINAGAR AND ALSO MENTION CTA + LIKE ,SHARE AND FOLLOW)
-
+(Create detailed image prompt for 1080x1350 social media news poster with:
+- headline
+- visual elements
+- branding
+- CTA
+- Like Share Follow
+- KARAN PATEL KUSHINAGAR branding)
 """
 
     try:
@@ -332,9 +405,7 @@ SOCIAL MEDIA IMAGE PROMPT:
         # FILTER BEST NEWS ONLY
         # =====================================================
 
-        if (
-            final_score >= 3
-        ):
+        if final_score >= 3:
 
             print("\n✅ HIGH VIRAL POTENTIAL DETECTED")
 
@@ -415,16 +486,24 @@ if not results_df.empty:
 🚀 VIRALITY:
 {row['virality_score']}/10
 """)
-short_link = shorten_url(row['link'])
 
     # =====================================================
     # SEND BEST NEWS TO TELEGRAM
     # =====================================================
-print("\n========== SENDING ALL TOP VIRAL NEWS ==========\n")
 
-for i, row in results_df.iterrows():
+    print("\n========== SENDING ALL TOP VIRAL NEWS ==========\n")
 
-    telegram_message = f"""
+    for i, row in results_df.iterrows():
+
+        real_link = extract_real_url(
+            row['link']
+        )
+
+        short_link = shorten_url(
+            real_link
+        )
+
+        telegram_message = f"""
 🔥 VIRAL NEWS #{i+1}
 
 📰 {row['headline']}
@@ -444,15 +523,17 @@ for i, row in results_df.iterrows():
 {row['ai_analysis'][:2000]}
 """
 
-    send_telegram_message(telegram_message)
+        send_telegram_message(
+            telegram_message
+        )
 
-    print(f"✅ Sent news #{i+1}")
+        print(f"✅ Sent news #{i+1}")
 
-    time.sleep(3)  # avoid Telegram flood limit
+        time.sleep(3)
 
     print("\n✅ CSV SAVED:")
     print(csv_path)
 
 else:
 
-    print("\n❌ NO HIGH-VIRAL NEWS FOUND TODAY")
+    print("\n❌ NO HIGH-VIRAL NEWS FOUND")
