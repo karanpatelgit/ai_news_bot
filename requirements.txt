@@ -1,5 +1,9 @@
 feedparser
 pandas
-requests
 python-dotenv
-huggingface_hub
+openai
+huggingface-hub
+beautifulsoup4
+lxml
+trafilatura
+requests
