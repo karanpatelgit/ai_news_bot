@@ -126,7 +126,7 @@ OPENROUTER_MODELS = [
 ]
 
 # =========================================================
-# DUPLICATE DETECTION  [FIX 1: defined is_similar — was used but never defined]
+# DUPLICATE DETECTION
 # =========================================================
 
 def is_similar(a, b, threshold=0.7):
@@ -499,6 +499,7 @@ def generate_ai_response(prompt):
         # Generate hashtags
         hashtags = (
             f"#{category.replace(' ', '')} "
+            # Removed unescaped character symbol that was disrupting formatting
             "#BreakingNews "
             "#IndiaNews "
             "#ViralNews"
@@ -642,12 +643,40 @@ for category, url in RSS_FEEDS.items():
         print(f"❌ RSS ERROR ({category}):", e)
 
 # =========================================================
-# DATAFRAME
+# DATAFRAME VALIDATION
 # =========================================================
 
 if not all_news:
     print("❌ NO NEWS FOUND")
     exit()
+
+# =========================================================
+# GENERATE DYNAMIC TREND SIGNALS (NEW COMPONENT)
+# =========================================================
+print("========== GATHERING TREND SIGNALS ==========")
+trending_keywords = {}
+
+# 1. Harvest hot tokens from recent YouTube uploads
+for channel_name, yt_url in YOUTUBE_FEEDS.items():
+    try:
+        print(f"Analyzing YouTube Trends: {channel_name}")
+        yt_feed = feedparser.parse(yt_url)
+        for entry in yt_feed.entries[:10]:  
+            words = re.findall(r'\w+', entry.title.lower())
+            for word in words:
+                if len(word) > 3:  # Drop common tiny filler words
+                    trending_keywords[word] = trending_keywords.get(word, 0) + 1.5
+    except Exception as e:
+        print(f"⚠️ YouTube Trend Extraction Error ({channel_name}):", e)
+
+# 2. Cross-Coverage Analysis (Track high repetition across all collected headlines)
+headline_frequencies = {}
+for news in all_news:
+    words = re.findall(r'\w+', news["headline"].lower())
+    for word in words:
+        if len(word) > 3:
+            headline_frequencies[word] = headline_frequencies.get(word, 0) + 1.0
+
 
 # =========================================================
 # REMOVE DUPLICATES
@@ -671,7 +700,7 @@ for news in all_news:
     if not duplicate_found:
         filtered_news.append(news)
 
-print(f"UNIQUE NEWS: {len(filtered_news)}")
+print(f"UNIQUE NEWS ITEMS TO PROFILE: {len(filtered_news)}")
 
 # =========================================================
 # RESULTS
@@ -701,29 +730,33 @@ for row in filtered_news:
     print("=" * 80)
 
     # =====================================================
-    # SMART SCORING
+    # SMART SCORING WITH INTEGRATED TREND FACTOR
     # =====================================================
 
     headline_lower = headline.lower()
+    headline_words = re.findall(r'\w+', headline_lower)
 
     india_score = 0
     geo_score = 0
     emotion_bonus = 0
     controversy_bonus = 0
+    trending_score = 0  # Initialize new factor
+
+    # Match tokens against our dynamic trend profiles
+    for word in headline_words:
+        if word in trending_keywords:
+            trending_score += trending_keywords[word]
+        if word in headline_frequencies:
+            # Score bumps up if multiple news outlets are running matching keywords
+            trending_score += (headline_frequencies[word] * 0.20)
+
+    # Normalize trending score to keep it balanced (Cap its top value at 5.0)
+    trending_score = min(round(trending_score, 2), 5.0)
 
     HIGH_PRIORITY_KEYWORDS = [
-        "modi",
-        "india",
-        "pakistan",
-        "china",
-        "army",
-        "attack",
-        "war",
-        "trump",
-        "terror",
-        "breaking",
-        "alert",
-        "israel"
+        "modi", "india", "pakistan", "china", "army", 
+        "attack", "war", "trump", "terror", "breaking", 
+        "alert", "israel"
     ]
 
     for keyword in HIGH_PRIORITY_KEYWORDS:
@@ -731,14 +764,8 @@ for row in filtered_news:
             india_score += 1.5
 
     EMOTIONAL_WORDS = [
-        "shock",
-        "fear",
-        "warning",
-        "danger",
-        "viral",
-        "anger",
-        "violence",
-        "protest"
+        "shock", "fear", "warning", "danger", 
+        "viral", "anger", "violence", "protest"
     ]
 
     for word in EMOTIONAL_WORDS:
@@ -760,12 +787,13 @@ for row in filtered_news:
         controversy_bonus += 2
 
     # =====================================================
-    # PRE-AI SCORE GATE
+    # PRE-AI SCORE GATE (UPDATED WITH WEIGHTS)
     # =====================================================
 
     raw_score = (
-        india_score * 2.0 +
-        geo_score * 1.5 +
+        india_score * 1.5 +
+        geo_score * 1.2 +
+        trending_score * 1.5 +  # Heavy priority multiplier for real-time trending topics
         emotion_bonus * 1.0 +
         controversy_bonus * 1.0
     )
@@ -775,7 +803,7 @@ for row in filtered_news:
 
     raw_score = round(raw_score, 2)
 
-    print(f"📊 PRE SCORE: {raw_score}")
+    print(f"📊 PRE SCORE (Dynamic Trend Included): {raw_score}")
 
     # =====================================================
     # HARD GATE
@@ -852,13 +880,14 @@ Source Link: {link}
         ) if toxicity_match else 0
 
         # =====================================================
-        # FINAL SCORE
+        # FINAL SCORE MATRIX (BALANCED TO ACCOMMODATE TRENDING)
         # =====================================================
 
         final_score = (
-            virality_score * 0.35 +
-            emotion_score * 0.25 +
-            india_score * 0.20 +
+            virality_score * 0.25 +
+            emotion_score * 0.20 +
+            trending_score * 0.20 +  # 20% total allocation towards calculated trend score
+            india_score * 0.15 +
             geo_score * 0.10 +
             emotion_bonus * 0.05 +
             controversy_bonus * 0.05 -
@@ -899,6 +928,7 @@ Source Link: {link}
 📈 Viral Score: {final_score}
 ❤️ Emotion: {emotion_score}/10
 🚀 Virality: {virality_score}/10
+🔥 Trend Weight: {trending_score}/5.0
 ⚠️ Toxicity: {toxicity_score}/10
 
 ====================
@@ -942,6 +972,7 @@ https://www.facebook.com/share/1D627R2qFV/
             "emotion_score": emotion_score,
             "virality_score": virality_score,
             "toxicity_score": toxicity_score,
+            "trending_score": trending_score,
             "final_score": final_score,
             "ai_result": ai_result
         })
@@ -978,4 +1009,3 @@ if not results_df.empty:
 
 else:
     print("❌ NO HIGH VIRAL NEWS FOUND")
-
