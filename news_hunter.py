@@ -12,6 +12,7 @@ import re
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
+from difflib import SequenceMatcher
 
 # =========================================================
 # LOAD ENV VARIABLES
@@ -33,11 +34,10 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 # CONFIG
 # =========================================================
 
-MAX_WORKERS = 3
-MAX_ARTICLES_TO_PROCESS = 25
+MAX_WORKERS = 5
 AI_SLEEP_TIME = 1
 TELEGRAM_SLEEP_TIME = 1
-LOCAL_NEWS_BONUS = 2.0
+LOCAL_NEWS_BONUS = 2.5
 
 # =========================================================
 # AI CLIENTS
@@ -548,14 +548,46 @@ Political Toxicity: 0/10
 # =========================================================
 
 RSS_FEEDS = {
+    # LOCAL
     "Kushinagar": "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en",
     "Gorakhpur": "https://news.google.com/rss/headlines/section/geo/Gorakhpur?hl=en-IN&gl=IN&ceid=IN:en",
+
+    # INDIA
     "India": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
-    "Technology": "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
-    "World": "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
+
+    # HIGH PRIORITY
+    "India Politics": "https://news.google.com/rss/search?q=india+politics&hl=en-IN&gl=IN&ceid=IN:en",
+    "India Pakistan": "https://news.google.com/rss/search?q=india+pakistan&hl=en-IN&gl=IN&ceid=IN:en",
+    "India China": "https://news.google.com/rss/search?q=india+china&hl=en-IN&gl=IN&ceid=IN:en",
+    "Breaking": "https://news.google.com/rss/search?q=breaking+india&hl=en-IN&gl=IN&ceid=IN:en",
+    "Crime": "https://news.google.com/rss/search?q=india+crime&hl=en-IN&gl=IN&ceid=IN:en",
+    "Defense": "https://news.google.com/rss/search?q=india+army+defense&hl=en-IN&gl=IN&ceid=IN:en",
+    "AI": "https://news.google.com/rss/search?q=artificial+intelligence+india&hl=en-IN&gl=IN&ceid=IN:en",
     "Business": "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en",
-    "Entertainment": "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-IN&gl=IN&ceid=IN:en"
+    "World": "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
+
+    # REAL SOURCES
+    "Reuters World": "https://feeds.reuters.com/Reuters/worldNews",
+    "BBC World": "http://feeds.bbci.co.uk/news/world/rss.xml",
+    "BBC India": "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml",
+    "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
+
+    # REDDIT SIGNALS
+    "Reddit India": "https://www.reddit.com/r/india/.rss",
+    "Reddit WorldNews": "https://www.reddit.com/r/worldnews/.rss",
+    "Reddit Geopolitics": "https://www.reddit.com/r/geopolitics/.rss"
 }
+# =========================================================
+# YOUTUBE TREND SIGNALS
+# =========================================================
+
+YOUTUBE_FEEDS = {
+    "AajTak": "https://www.youtube.com/feeds/videos.xml?channel_id=UCt4t-jeY85JegMlZ-E5UWtA",
+    "ANI": "https://www.youtube.com/feeds/videos.xml?channel_id=UCV-JlfdG9A8ZkNTJbVnHGkg",
+    "IndiaTV": "https://www.youtube.com/feeds/videos.xml?channel_id=UCttspZesZIDEwwpVIgoZtWQ",
+    "TV9 Bharatvarsh": "https://www.youtube.com/feeds/videos.xml?channel_id=UCP0uG-mcMImgKnJz-VsQxKQ"
+}
+
 
 # =========================================================
 # FETCH NEWS
@@ -568,11 +600,12 @@ print("========== FETCHING NEWS ==========")
 for category, url in RSS_FEEDS.items():
 
     try:
+
         print(f"Fetching: {category}")
 
         feed = feedparser.parse(url)
 
-        entries = feed.entries[:10]
+        entries = feed.entries[:20]
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
 
@@ -587,7 +620,9 @@ for category, url in RSS_FEEDS.items():
             ]
 
             for future in as_completed(futures):
+
                 try:
+
                     result = future.result()
 
                     if result:
@@ -609,43 +644,29 @@ if not all_news:
     print("❌ NO NEWS FOUND")
     exit()
 
-df = pd.DataFrame(all_news)
-
+# =========================================================
 # REMOVE DUPLICATES
-
-df["headline_clean"] = (
-    df["headline"]
-    .str.lower()
-    .str.strip()
-)
-
-df.drop_duplicates(
-    subset=["headline_clean"],
-    inplace=True
-)
-
-df.drop(columns=["headline_clean"], inplace=True)
-
-print(f"TOTAL UNIQUE NEWS: {len(df)}")
-
-# =========================================================
-# PRIORITY NEWS
 # =========================================================
 
-local_news = df[
-    df['category'].isin(['Kushinagar', 'Gorakhpur'])
-]
+filtered_news = []
 
-other_news = df[
-    ~df['category'].isin(['Kushinagar', 'Gorakhpur'])
-]
+for news in all_news:
 
-df_to_process = pd.concat([
-    local_news,
-    other_news
-]).head(MAX_ARTICLES_TO_PROCESS)
+    duplicate_found = False
 
-print(f"PROCESSING: {len(df_to_process)} ARTICLES")
+    for existing in filtered_news:
+
+        if is_similar(
+            news["headline"],
+            existing["headline"]
+        ):
+            duplicate_found = True
+            break
+
+    if not duplicate_found:
+        filtered_news.append(news)
+
+print(f"UNIQUE NEWS: {len(filtered_news)}")
 
 # =========================================================
 # RESULTS
@@ -657,19 +678,83 @@ results = []
 # MAIN LOOP
 # =========================================================
 
-for index, row in df_to_process.iterrows():
+for row in filtered_news:
 
     headline = row["headline"]
     category = row["category"]
     link = row["link"]
     article_text = row["article"]
 
-    is_local = category in ['Kushinagar', 'Gorakhpur']
+    is_local = category in [
+        'Kushinagar',
+        'Gorakhpur'
+    ]
 
     print("=" * 80)
     print(f"CATEGORY: {category}")
     print(f"HEADLINE: {headline}")
     print("=" * 80)
+
+
+    # =====================================================
+    # SMART SCORING
+    # =====================================================
+
+    headline_lower = headline.lower()
+
+    india_score = 0
+    geo_score = 0
+    emotion_bonus = 0
+    controversy_bonus = 0
+
+    HIGH_PRIORITY_KEYWORDS = [
+        "modi",
+        "india",
+        "pakistan",
+        "china",
+        "army",
+        "attack",
+        "war",
+        "trump",
+        "terror",
+        "breaking",
+        "alert",
+        "israel"
+    ]
+
+    for keyword in HIGH_PRIORITY_KEYWORDS:
+        if keyword in headline_lower:
+            india_score += 1.5
+
+    EMOTIONAL_WORDS = [
+        "shock",
+        "fear",
+        "warning",
+        "danger",
+        "viral",
+        "anger",
+        "violence",
+        "protest"
+    ]
+
+    for word in EMOTIONAL_WORDS:
+        if word in headline_lower:
+            emotion_bonus += 1
+
+    if category in [
+        "India Politics",
+        "India Pakistan",
+        "India China",
+        "Defense"
+    ]:
+        geo_score += 3
+
+    if category in [
+        "Crime",
+        "Breaking"
+    ]:
+        controversy_bonus += 2
+
 
     prompt = f"""
 You are an elite viral content writer, Facebook monetization strategist, and social media journalist.
@@ -827,7 +912,7 @@ Full Article: {article_text}
 Source Link: {link}
 """
 
-    try:
+     try:
 
         ai_result = generate_ai_response(prompt)
 
@@ -859,9 +944,13 @@ Source Link: {link}
         ) if toxicity_match else 0
 
         final_score = (
-            virality_score * 0.5 +
-            emotion_score * 0.35 -
-            toxicity_score * 0.15
+            virality_score * 0.25 +
+            emotion_score * 0.20 +
+            india_score * 0.20 +
+            geo_score * 0.15 +
+            emotion_bonus * 0.10 +
+            controversy_bonus * 0.10 -
+            toxicity_score * 0.05
         )
 
         if is_local:
@@ -869,24 +958,8 @@ Source Link: {link}
 
         final_score = round(final_score, 2)
 
-        print(f"FINAL SCORE: {final_score}")
-
-        if final_score >= 5:
-
-            results.append({
-                "category": category,
-                "headline": headline,
-                "link": link,
-                "emotion_score": emotion_score,
-                "virality_score": virality_score,
-                "toxicity_score": toxicity_score,
-                "final_score": final_score,
-                "ai_analysis": ai_result,
-                "is_local": is_local
-            })
-
-            cleaned_link = clean_url(link)
-            short_link = shorten_url(cleaned_link)
+        cleaned_link = clean_url(link)
+        short_link = shorten_url(cleaned_link)
 
             telegram_message = f"""
 🔥 VIRAL NEWS 
@@ -909,10 +982,8 @@ Source Link: {link}
 follow us on :
 📸 Instagram:
 https://www.instagram.com/karan_patel_kushinagar
-
 ▶️ YouTube:
 https://youtube.com/@karan_patel_kushinagar
-
 📘 Facebook:
 https://www.facebook.com/share/1D627R2qFV/
 """
