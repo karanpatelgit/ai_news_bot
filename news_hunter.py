@@ -818,19 +818,13 @@ FACTUALITY RULES
 INPUT DATA
 ━━━━━━━━━━━━━━━
 
-Title: {title}
+Title: {headline}
 
 Category: {category}
 
-Summary: {summary}
-
 Full Article: {article_text}
 
-Source: {source}
-
-Virality Score: {virality_score}
-
-Emotion Score: {emotion_score}
+Source Link: {link}
 """
 
     try:
