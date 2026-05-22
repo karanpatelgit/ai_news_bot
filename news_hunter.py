@@ -761,9 +761,6 @@ for row in filtered_news:
 
     # =====================================================
     # PRE-AI SCORE GATE
-    # If score < 5:
-    # - DO NOT generate AI response
-    # - DO NOT send Telegram
     # =====================================================
 
     raw_score = (
@@ -780,13 +777,13 @@ for row in filtered_news:
 
     print(f"📊 PRE SCORE: {raw_score}")
 
-    # ==========================================
+    # =====================================================
     # HARD GATE
-    # ==========================================
+    # =====================================================
 
     if raw_score < 5:
         print(f"⏭️ SKIPPED LOW SCORE NEWS: {headline}")
-    else:
+        continue
 
     print("✅ SCORE PASSED — GENERATING AI CONTENT")
 
@@ -823,78 +820,76 @@ Full Article: {article_text}
 Source Link: {link}
 """
 
-    # [FIX 2: try block was misindented — aligned correctly under for loop]
-try:
+    try:
 
-    ai_result = generate_ai_response(prompt)
+        ai_result = generate_ai_response(prompt)
 
-    emotion_match = re.search(
-        r"Emotion Score:\s*(\d+)/10",
-        ai_result
-    )
+        emotion_match = re.search(
+            r"Emotion Score:\s*(\d+)/10",
+            ai_result
+        )
 
-    virality_match = re.search(
-        r"Virality Score:\s*(\d+)/10",
-        ai_result
-    )
+        virality_match = re.search(
+            r"Virality Score:\s*(\d+)/10",
+            ai_result
+        )
 
-    toxicity_match = re.search(
-        r"Political Toxicity:\s*(\d+)/10",
-        ai_result
-    )
+        toxicity_match = re.search(
+            r"Political Toxicity:\s*(\d+)/10",
+            ai_result
+        )
 
-    emotion_score = int(
-        emotion_match.group(1)
-    ) if emotion_match else 5
+        emotion_score = int(
+            emotion_match.group(1)
+        ) if emotion_match else 5
 
-    virality_score = int(
-        virality_match.group(1)
-    ) if virality_match else 5
+        virality_score = int(
+            virality_match.group(1)
+        ) if virality_match else 5
 
-    toxicity_score = int(
-        toxicity_match.group(1)
-    ) if toxicity_match else 0
+        toxicity_score = int(
+            toxicity_match.group(1)
+        ) if toxicity_match else 0
 
-    # =====================================================
-    # FINAL SCORE
-    # =====================================================
+        # =====================================================
+        # FINAL SCORE
+        # =====================================================
 
-    final_score = (
-        virality_score * 0.35 +
-        emotion_score * 0.25 +
-        india_score * 0.20 +
-        geo_score * 0.10 +
-        emotion_bonus * 0.05 +
-        controversy_bonus * 0.05 -
-        toxicity_score * 0.05
-    )
+        final_score = (
+            virality_score * 0.35 +
+            emotion_score * 0.25 +
+            india_score * 0.20 +
+            geo_score * 0.10 +
+            emotion_bonus * 0.05 +
+            controversy_bonus * 0.05 -
+            toxicity_score * 0.05
+        )
 
-    if is_local:
-        final_score += LOCAL_NEWS_BONUS
+        if is_local:
+            final_score += LOCAL_NEWS_BONUS
 
-    final_score = round(final_score, 2)
+        final_score = round(final_score, 2)
 
-    # =====================================================
-    # SCORE GATE
-    # DO NOT SEND LOW VIRAL NEWS
-    # =====================================================
+        # =====================================================
+        # SCORE GATE
+        # =====================================================
 
-    if final_score < 5:
-        print(f"⏭️ SKIPPED LOW SCORE NEWS: {final_score}")
-        continue
+        if final_score < 5:
+            print(f"⏭️ SKIPPED LOW SCORE NEWS: {final_score}")
+            continue
 
-    # =====================================================
-    # CLEAN URL
-    # =====================================================
+        # =====================================================
+        # CLEAN URL
+        # =====================================================
 
-    cleaned_link = clean_url(link)
-    short_link = shorten_url(cleaned_link)
+        cleaned_link = clean_url(link)
+        short_link = shorten_url(cleaned_link)
 
-    # =====================================================
-    # TELEGRAM MESSAGE
-    # =====================================================
+        # =====================================================
+        # TELEGRAM MESSAGE
+        # =====================================================
 
-    telegram_message = f"""
+        telegram_message = f"""
 🔥 VIRAL NEWS
 
 📰 {headline}
@@ -927,35 +922,36 @@ https://youtube.com/@karan_patel_kushinagar
 https://www.facebook.com/share/1D627R2qFV/
 """
 
-    # =====================================================
-    # SEND TELEGRAM
-    # =====================================================
+        # =====================================================
+        # SEND TELEGRAM
+        # =====================================================
 
-    send_telegram_message(telegram_message)
+        send_telegram_message(telegram_message)
 
-    print("✅ SENT TO TELEGRAM")
+        print("✅ SENT TO TELEGRAM")
 
-    # =====================================================
-    # SAVE RESULTS
-    # =====================================================
+        # =====================================================
+        # SAVE RESULTS
+        # =====================================================
 
-    results.append({
-        "category": category,
-        "headline": headline,
-        "link": link,
-        "short_link": short_link,
-        "emotion_score": emotion_score,
-        "virality_score": virality_score,
-        "toxicity_score": toxicity_score,
-        "final_score": final_score,
-        "ai_result": ai_result
-    })
+        results.append({
+            "category": category,
+            "headline": headline,
+            "link": link,
+            "short_link": short_link,
+            "emotion_score": emotion_score,
+            "virality_score": virality_score,
+            "toxicity_score": toxicity_score,
+            "final_score": final_score,
+            "ai_result": ai_result
+        })
 
-    time.sleep(TELEGRAM_SLEEP_TIME)
-    time.sleep(AI_SLEEP_TIME)
+        time.sleep(TELEGRAM_SLEEP_TIME)
+        time.sleep(AI_SLEEP_TIME)
 
-except Exception as e:
-    print("❌ AI ANALYSIS ERROR:", e)
+    except Exception as e:
+        print("❌ AI ANALYSIS ERROR:", e)
+        continue
 
 # =========================================================
 # SAVE CSV
