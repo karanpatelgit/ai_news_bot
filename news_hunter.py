@@ -944,7 +944,7 @@ for row in filtered_news:
 
     print(f"📊 PRE SCORE (Dynamic Gate Analysis): {raw_score}")
 
-    if raw_score < 5.5:
+    if raw_score < 6.0:
         print(f"⏭️ SKIPPED LOW PRE-SCORE: {headline} ({raw_score})")
         continue
 
