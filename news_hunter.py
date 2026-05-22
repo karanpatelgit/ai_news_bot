@@ -314,7 +314,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         }
                     ],
                     temperature=0.8,
-                    max_tokens=700
+                    max_tokens=2048
                 )
 
                 content = response.choices[0].message.content
@@ -344,7 +344,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         }
                     ],
                     temperature=0.8,
-                    max_tokens=700
+                    max_tokens=2048
                 )
 
                 content = response.choices[0].message.content
@@ -374,7 +374,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         }
                     ],
                     temperature=0.8,
-                    max_tokens=700
+                    max_tokens=2048
                 )
 
                 content = response.choices[0].message.content
@@ -386,7 +386,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 print("❌ HF FAILED:", e)
 
     # =====================================================
-    # OPENROUTER (FIXED ROUTING WITH VALID HEADERS AND STRATEGIC FREE NAMES)
+    # OPENROUTER
     # =====================================================
 
     if openrouter_client:
@@ -404,7 +404,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         }
                     ],
                     temperature=0.8,
-                    max_tokens=700,
+                    max_tokens=2048,
                     extra_headers={
                         "HTTP-Referer": "https://github.com/",
                         "X-Title": "News Hunter Bot Matrix"
@@ -421,75 +421,71 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 print(e)
 
     # =====================================================
-    # SMART FALLBACK FORMATTER (MINIMUM 10+ DEEP INSIGHTFUL SCRATCHING LINES)
+    # SMART FALLBACK FORMATTER
     # =====================================================
 
     print("\n⚠️ USING SMART FALLBACK FORMATTER (RUNNING DEEP ENGINE)")
 
-            try:
-                # Step 1: Structural backup verification
-                if not headline or headline.strip() == "":
-                    title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
-                    headline = title_match.group(1).strip() if title_match else "Breaking News"
-        
-                if not category or category.strip() == "":
-                    category_match = re.search(r"category:\s*(.+)", prompt, re.IGNORECASE)
-                    category = category_match.group(1).strip() if category_match else "News"
-        
-                if not article_text or len(article_text.strip()) < 50:
-                    article_match = re.search(r"(?:full article|article):\s*(.+?)(?:source link|link):", prompt, re.DOTALL | re.IGNORECASE)
-                    article_text = article_match.group(1).strip() if article_match else headline
-        
-                if not link or link.strip() == "":
-                    link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
-                    link = link_match.group(1).strip() if link_match else ""
-        
-                # Step 2: Advanced text extraction (Scratches deep line structures instead of just words)
-                clean_text = re.sub(r'\s+', ' ', article_text).strip()
-                
-                # Split across standard sentence and phrase boundary rules
-                sentences = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
-                important_lines = []
-        
-                for sentence in sentences:
-                    sentence = sentence.strip()
-                    
-                    # Filter tracking codes, share handles and noisy media labels
-                    if any(x in sentence.lower() for x in ["click here", "subscribe", "follow us", "read more", "advertisement", "copyright"]):
-                        continue
-                        
-                    # Accept informative granular lines that are not copy-pasted headlines
-                    if len(sentence) > 30 and sentence.lower() not in headline.lower():
-                        important_lines.append(sentence)
-                        
-                    # Requirement Fulfilled: Capture at least 10 high-quality dynamic insight items
+    try:
+
+        # Step 1: Structural backup verification
+        if not headline or headline.strip() == "":
+            title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
+            headline = title_match.group(1).strip() if title_match else "Breaking News"
+
+        if not category or category.strip() == "":
+            category_match = re.search(r"category:\s*(.+)", prompt, re.IGNORECASE)
+            category = category_match.group(1).strip() if category_match else "News"
+
+        if not article_text or len(article_text.strip()) < 50:
+            article_match = re.search(r"(?:full article|article):\s*(.+?)(?:source link|link):", prompt, re.DOTALL | re.IGNORECASE)
+            article_text = article_match.group(1).strip() if article_match else headline
+
+        if not link or link.strip() == "":
+            link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
+            link = link_match.group(1).strip() if link_match else ""
+
+        # Step 2: Advanced text extraction
+        clean_text = re.sub(r'\s+', ' ', article_text).strip()
+
+        sentences = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
+        important_lines = []
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+
+            if any(x in sentence.lower() for x in ["click here", "subscribe", "follow us", "read more", "advertisement", "copyright"]):
+                continue
+
+            if len(sentence) > 30 and sentence.lower() not in headline.lower():
+                important_lines.append(sentence)
+
+            if len(important_lines) >= 10:
+                break
+
+        # Emergency chunk fallback if fewer than 10 lines
+        if len(important_lines) < 10:
+            if len(clean_text) > len(headline):
+                chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
+                for chunk in chunks:
+                    if len(chunk) > 25 and chunk not in important_lines:
+                        important_lines.append(chunk)
                     if len(important_lines) >= 10:
                         break
-        
-                # Emergency Fallback: If scraped array contains less than 10 lines, split structural byte chunks
-                if len(important_lines) < 10:
-                    if len(clean_text) > len(headline):
-                        chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
-                        for chunk in chunks:
-                            if len(chunk) > 25 and chunk not in important_lines:
-                                important_lines.append(chunk)
-                            if len(important_lines) >= 10:
-                                break
-            
-            # Pad placeholders to ensure the post never collapses structurally
-            backup_points = [
-                "इस महत्वपूर्ण घटनाक्रम के बाद संबंधित विभागों और प्रशासनिक टीमों को अलर्ट मोड पर रखा गया है।",
-                "ग्राउंड जीरो पर मौजूद सुरक्षा बल और जांच एजेंसियां मामले की हर एक कड़ी को बारीकी से खंगाल रही हैं।",
-                "स्थानीय प्रशासन ने आम जनता से किसी भी प्रकार की अफवाहों पर ध्यान न देने की अपील जारी की है।",
-                "आधिकारिक सूत्रों के अनुसार, आने वाले कुछ घंटों में इस विषय पर एक विस्तृत प्रेस ब्रीफिंग की जा सकती है।",
-                "इस संवेदनशील मामले पर देश-दुनिया के बड़े राजनीतिक और रणनीतिक विश्लेषकों की नजरें लगातार टिकी हुई हैं।"
-            ]
-            for pt in backup_points:
-                if len(important_lines) >= 10:
-                    break
-                important_lines.append(pt)
 
-        # Create bullet formats
+        # Pad with Hindi placeholders if still under 10
+        backup_points = [
+            "इस महत्वपूर्ण घटनाक्रम के बाद संबंधित विभागों और प्रशासनिक टीमों को अलर्ट मोड पर रखा गया है।",
+            "ग्राउंड जीरो पर मौजूद सुरक्षा बल और जांच एजेंसियां मामले की हर एक कड़ी को बारीकी से खंगाल रही हैं।",
+            "स्थानीय प्रशासन ने आम जनता से किसी भी प्रकार की अफवाहों पर ध्यान न देने की अपील जारी की है।",
+            "आधिकारिक सूत्रों के अनुसार, आने वाले कुछ घंटों में इस विषय पर एक विस्तृत प्रेस ब्रीफिंग की जा सकती है।",
+            "इस संवेदनशील मामले पर देश-दुनिया के बड़े राजनीतिक और रणनीतिक विश्लेषकों की नजरें लगातार टिकी हुई हैं।"
+        ]
+        for pt in backup_points:
+            if len(important_lines) >= 10:
+                break
+            important_lines.append(pt)
+
         summary = "\n\n".join([f"• {line}" for line in important_lines[:12]])
 
         hashtags = f"#{category.replace(' ', '')} #BreakingNews #IndiaNews #ViralNews #FlashNews"
@@ -527,11 +523,11 @@ Political Toxicity: 1/10
         return f"""
 🔥 BREAKING NEWS
 
-📰 {headline if 'headline' in locals() else 'New Update'}
-📂 Category: {category if 'category' in locals() else 'News'}
+📰 {headline}
+📂 Category: {category}
 
 ━━━━━━━━━━━━━━━
-• {headline if 'headline' in locals() else 'Click source link below to read full breaking news coverage.'}
+• {headline}
 • ग्राउंड जीरो से आ रही हर पल की लाइव रिपोर्टिंग के लिए हमारे साथ बने रहें।
 ━━━━━━━━━━━━━━━
 
@@ -539,7 +535,7 @@ Political Toxicity: 1/10
 📢 ऐसी ही खबरों के लिए follow करें।
 
 🔗 Source:
-{link if 'link' in locals() else ''}
+{link}
 
 #BreakingNews #ViralNews
 Emotion Score: 5/10
