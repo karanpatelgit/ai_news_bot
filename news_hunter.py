@@ -786,7 +786,7 @@ for row in filtered_news:
 
     if raw_score < 5:
         print(f"⏭️ SKIPPED LOW SCORE NEWS: {headline}")
-        continue
+    else:
 
     print("✅ SCORE PASSED — GENERATING AI CONTENT")
 
