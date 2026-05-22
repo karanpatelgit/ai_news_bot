@@ -1129,7 +1129,7 @@ if not results_df.empty:
 
     csv_path = os.path.join(
         SCRIPT_DIR,
-        \"viral_reel_news.csv\"
+         "viral_reel_news.csv"
     )
 
     results_df.to_csv(csv_path, index=False)
