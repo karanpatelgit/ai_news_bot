@@ -759,159 +759,67 @@ for row in filtered_news:
     ]:
         controversy_bonus += 2
 
+    # =====================================================
+    # PRE-AI SCORE GATE
+    # If score < 5:
+    # - DO NOT generate AI response
+    # - DO NOT send Telegram
+    # =====================================================
+
+    raw_score = (
+        india_score * 0.20 +
+        geo_score * 0.15 +
+        emotion_bonus * 0.10 +
+        controversy_bonus * 0.10
+    )
+
+    if is_local:
+        raw_score += LOCAL_NEWS_BONUS
+
+    raw_score = round(raw_score, 2)
+
+    print(f"📊 PRE SCORE: {raw_score}")
+
+    # ==========================================
+    # HARD GATE
+    # ==========================================
+
+    if raw_score < 5:
+        print(f"⏭️ SKIPPED LOW SCORE NEWS: {headline}")
+        continue
+
+    print("✅ SCORE PASSED — GENERATING AI CONTENT")
+
     prompt = f"""
-You are an elite viral content writer, Facebook monetization strategist, and social media journalist.
+You are an elite viral  news content writer, Facebook monetization strategist, and social media journalist in Hindi Language .
 
-Your task is to transform the given news/topic into a HIGH-ENGAGEMENT, MONETIZATION-OPTIMIZED Hindi social media article designed for:
-- Facebook monetization
-- Instagram engagement
-- Telegram virality
-- LinkedIn reach
-- X/Twitter discussions
-- YouTube community posts
+Create a high-engagement, monetization-focused Hindi social media article optimized for Facebook, Instagram, Telegram, LinkedIn, X/Twitter, and YouTube community posts. The article should feel human-written, emotionally engaging, trustworthy, shareable, curiosity-driven, and tailored for social media.
 
-The article must feel:
-- Human-written
-- Emotionally engaging
-- Trustworthy
-- Highly shareable
-- Curiosity-driven
-- Social-media optimized
+Write in conversational, simple Hindi with a natural storytelling tone and mobile-friendly formatting. Use curiosity hooks, emotional storytelling, suspense, short punchy paragraphs, and relevant emojis. Avoid robotic language, repetition, fake info, clickbait, overly formal style, and long paragraphs.
 
-━━━━━━━━━━━━━━━
-PRIMARY GOAL
-━━━━━━━━━━━━━━━
+Structure the output as follows:
 
-Maximize:
-- Audience retention
-- Shares
-- Comments
-- Saves
-- Reactions
-- Follower growth
-- Organic reach
-- Facebook monetization potential
+Viral headline: Emotional, curiosity-based, clickable, and Facebook-optimized.
+Opening hook (2–4 lines): Grabs attention immediately, builds suspense or emotion.
+Main article (400–600 words): Explain what happened, why it matters, hidden angles, social reactions, impact on people, and possible future effects. Maintain suspense and emotional flow with short paragraphs.
+Key highlights: 3–7 important bullet points.
+Public reaction: Summarize social media and public responses.
+Engagement section: Ask emotionally engaging questions like “आपकी क्या राय है?” or “क्या सरकार को कार्रवाई करनी चाहिए?”
+Call to action: Encourage comments, shares, follows, saves, and joining Telegram/WhatsApp channels.
+Hashtags: Use trending, niche, viral Hindi, and topic-specific tags.
+Follow retention and monetization rules: Start with a strong hook, keep curiosity rising, optimize for mobile, use emotional language strategically, and maximize Facebook reach and engagement.
+Note : never mention the section heading like - public reactioon, engagement section etc.
+Ensure factual accuracy without exaggeration or misinformation, clearly separating facts from opinions.
+IMPORTANT:
+- Generate COMPLETE output
+- Never stop midway
+- Never cut article incomplete
+- Finish all sections completely
 
-━━━━━━━━━━━━━━━
-WRITING STYLE
-━━━━━━━━━━━━━━━
-
-Write in:
-- Conversational Hindi
-- Simple but powerful language
-- Natural storytelling tone
-- Mobile-friendly formatting
-
-Use:
-- Curiosity hooks
-- Emotional storytelling
-- Strategic suspense
-- Punchy short paragraphs
-- Viral pacing
-- Human-like reactions
-- Strategic emojis
-
-Avoid:
-- Robotic AI wording
-- Repetitive lines
-- Fake information
-- Extreme clickbait
-- Overly formal language
-- Long boring paragraphs
-
-━━━━━━━━━━━━━━━
-OUTPUT FORMAT
-━━━━━━━━━━━━━━━
-
-1️⃣ 🔥 VIRAL HEADLINE
-- Emotional + curiosity-based
-- Highly clickable
-- Natural sounding
-- Facebook optimized
-
-2️⃣ ⚡ OPENING HOOK (2–4 lines)
-- Instantly grab attention
-- Create suspense/emotion
-- Force users to continue reading
-
-3️⃣ 📰 MAIN ARTICLE
-Length: 400–800 words
-
-Must include:
-- What happened
-- Why it matters
-- Hidden angle/public emotion
-- Social/media reaction
-- Impact on people
-- Possible future consequences
-
-WRITING RULES:
-- Maintain suspense throughout
-- Use short paragraphs
-- Make every paragraph continue curiosity
-- Keep emotional flow natural
-- Use dramatic pacing without misinformation
-
-4️⃣ 📌 KEY HIGHLIGHTS
-- 3–7 important bullet points
-
-5️⃣ 🌍 PUBLIC REACTION SECTION
-Summarize how people/social media are reacting.
-
-6️⃣ 🧠 ENGAGEMENT SECTION
-Ask emotionally engaging questions such as:
-- "आपकी क्या राय है?"
-- "क्या ऐसा होना सही है?"
-- "क्या सरकार को कार्रवाई करनी चाहिए?"
-- "क्या आप इससे सहमत हैं?"
-
-7️⃣ 📢 CALL TO ACTION
-Encourage users to:
-- Comment
-- Share
-- Follow
-- Save the post
-- Join Telegram/WhatsApp channel
-
-8️⃣ 🔖 HASHTAGS
-Include:
-- Trending hashtags
-- Niche hashtags
-- Viral Hindi hashtags
-- Topic-specific hashtags
-
-━━━━━━━━━━━━━━━
-RETENTION & MONETIZATION RULES
-━━━━━━━━━━━━━━━
-
-- First 3 lines MUST be highly engaging
-- Every paragraph should increase curiosity
-- Optimize for mobile reading
-- Use emotional wording strategically
-- Increase comment potential naturally
-- Encourage debates/discussions
-- Keep readers till the end
-- Maximize Facebook organic reach
-
-━━━━━━━━━━━━━━━
-FACTUALITY RULES
-━━━━━━━━━━━━━━━
-
-- Stay factually accurate
-- Do not spread misinformation
-- Do not exaggerate beyond available facts
-- Clearly separate facts from reactions/speculation
-
-━━━━━━━━━━━━━━━
-INPUT DATA
-━━━━━━━━━━━━━━━
-
+Take your input data as :
 Title: {headline}
-
 Category: {category}
-
 Full Article: {article_text}
-
 Source Link: {link}
 """
 
@@ -947,13 +855,13 @@ Source Link: {link}
             toxicity_match.group(1)
         ) if toxicity_match else 0
 
-        final_score = (
-            virality_score * 0.25 +
-            emotion_score * 0.20 +
+                final_score = (
+            virality_score * 0.35 +
+            emotion_score * 0.25 +
             india_score * 0.20 +
-            geo_score * 0.15 +
-            emotion_bonus * 0.10 +
-            controversy_bonus * 0.10 -
+            geo_score * 0.10 +
+            emotion_bonus * 0.05 +
+            controversy_bonus * 0.05 -
             toxicity_score * 0.05
         )
 
