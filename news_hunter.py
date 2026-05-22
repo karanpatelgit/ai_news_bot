@@ -268,12 +268,9 @@ def process_single_entry(entry, category):
         
         # Today's date (UTC)
         today = datetime.utcnow().date()
-        
-        # Yesterday's date
-        yesterday = today - timedelta(days=1)
-        
-        # ONLY TODAY + YESTERDAY NEWS
-        if published_date == today or published_date == yesterday:
+         
+        # ONLY TODAY Only 8 hrs before
+        if now - published_datetime <= timedelta(hours=8):
             
             real_link = extract_real_url(entry.link)
             article_text = fetch_full_article(real_link)
