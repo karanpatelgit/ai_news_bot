@@ -824,7 +824,7 @@ for row in filtered_news:
             local_bonus += 2.0  # Heavy boost for their home region
 
     # 2. National & Political High-Priority Matching
-   HIGH_PRIORITY_KEYWORDS = [
+    HIGH_PRIORITY_KEYWORDS = [
     # --- CENTRAL GOVERNMENT & BJP APPARATUS ---
     "modi", "narendra modi", "bjp", "amit shah", "jp nadda", "rajnath singh", "nirmala sitharaman", 
     "s jaishankar", "nitin gadkari", "yogi", "pmo", "pmo india", "nda", "rss", "mohan bhagwat", 
