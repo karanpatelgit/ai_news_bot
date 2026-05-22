@@ -1014,19 +1014,21 @@ Source Link: {link}
             toxicity_match.group(1)
         ) if toxicity_match else 0
 
-      # =====================================================
-        # FINAL SCORE MATRIX 
+       # =====================================================
+        # NEW BALANCED FINAL SCORE MATRIX (NO COMPRESSION)
         # =====================================================
-
+        # AI directly points dega: max 4.0 points (2.0 + 2.0)
+        ai_contribution = (virality_score * 0.20) + (emotion_score * 0.20)
+        
+        # Aapke core factors ka seedha real weight
         final_score = (
-            virality_score * 0.25 +
-            emotion_score * 0.20 +
-            trending_score * 0.20 +  
-            india_score * 0.15 +
-            geo_score * 0.10 +
-            emotion_bonus * 0.05 +
-            controversy_bonus * 0.05 -
-            toxicity_score * 0.05
+            ai_contribution +
+            trending_score +          # Seedha trend score judega (Max 5.0)
+            (india_score * 0.5) +     # Direct contribution
+            (geo_score * 0.5) +
+            (emotion_bonus * 0.3) +
+            (controversy_bonus * 0.3) -
+            (toxicity_score * 0.2)
         )
 
         if is_local or category in ['Kushinagar', 'Gorakhpur']:
@@ -1035,11 +1037,13 @@ Source Link: {link}
         final_score = round(final_score, 2)
 
         # =====================================================
-        # HARD GATE: FINAL SCORE LIMIT 
+        # FIXED FINAL GATE: NOW SET TO 6.5
         # =====================================================
-        if final_score < 3.5:
+        if final_score < 6.5:
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
+
+        print(f"🚀 FINAL SCORE PASSED ({final_score}) — SENDING TELEGRAM")
 
         # =====================================================
         # CLEAN URL
