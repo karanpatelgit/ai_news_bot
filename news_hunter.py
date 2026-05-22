@@ -1123,7 +1123,7 @@ results_df = pd.DataFrame(results)
 if not results_df.empty:
 
     results_df = results_df.sort_values(
-        by=\"final_score\",
+        by="final_score",
         ascending=False
     )
 
