@@ -1043,9 +1043,9 @@ Source Link: {link}
         final_score = round(final_score, 2)
 
         # =====================================================
-        # HARD GATE: FINAL SCORE LIMIT (Set to 6.0)
+        # HARD GATE: FINAL SCORE LIMIT 
         # =====================================================
-        if final_score < 6.0:
+        if final_score < 3.5:
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
