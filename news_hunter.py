@@ -20,13 +20,13 @@ from difflib import SequenceMatcher
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# GitHub Actions: secrets are env vars — no .env file needed
-# Local dev: create a .env file and load_dotenv() will pick it up
+# GitHub Actions: secrets are injected as env vars — no .env file needed
+# Local dev: .env file is picked up automatically if present
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except Exception:
-    pass  # On GitHub Actions dotenv is optional
+    pass
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 GROQ_API_KEY       = os.environ.get("GROQ_API_KEY", "").strip()
@@ -36,15 +36,14 @@ HF_TOKEN           = os.environ.get("HF_TOKEN", "").strip()
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 
-# Startup key check
 print("=" * 50)
 print("🔑 KEY STATUS:")
-print(f"   GROQ        : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
-print(f"   SAMBANOVA   : {'✅ SET' if SAMBANOVA_API_KEY else '❌ MISSING'}")
-print(f"   HF_TOKEN    : {'✅ SET' if HF_TOKEN else '❌ MISSING'}")
-print(f"   OPENROUTER  : {'✅ SET — ' + OPENROUTER_API_KEY[:8] + '...' if OPENROUTER_API_KEY else '❌ MISSING'}")
-print(f"   BOT_TOKEN   : {'✅ SET' if BOT_TOKEN else '❌ MISSING'}")
-print(f"   CHAT_ID     : {'✅ SET' if CHAT_ID else '❌ MISSING'}")
+print(f"   GROQ       : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
+print(f"   SAMBANOVA  : {'✅ SET' if SAMBANOVA_API_KEY else '❌ MISSING'}")
+print(f"   HF_TOKEN   : {'✅ SET' if HF_TOKEN else '❌ MISSING'}")
+print(f"   OPENROUTER : {'✅ SET — ' + OPENROUTER_API_KEY[:8] + '...' if OPENROUTER_API_KEY else '❌ MISSING'}")
+print(f"   BOT_TOKEN  : {'✅ SET' if BOT_TOKEN else '❌ MISSING'}")
+print(f"   CHAT_ID    : {'✅ SET' if CHAT_ID else '❌ MISSING'}")
 print("=" * 50)
 
 # =========================================================
@@ -136,10 +135,17 @@ HF_MODELS = [
 ]
 
 OPENROUTER_MODELS = [
-    "google/gemma-2-9b-it:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "deepseek/deepseek-chat",
-    "meta-llama/llama-3-8b-instruct:free"
+    # Auto-router: OpenRouter picks best available free model automatically
+    # This never 404s — always falls back to something working
+    "openrouter/auto",
+
+    # Manually listed current free models (May 2025) as backup order
+    "deepseek/deepseek-chat-v3-0324:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-3-27b-it:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "deepseek/deepseek-r1-0528:free",
+    "qwen/qwen3-8b:free",
 ]
 
 # =========================================================
@@ -373,8 +379,9 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 print("❌ HF FAILED:", e)
 
     # =====================================================
-    # OPENROUTER — raw requests, reads directly from env
-    # No client object: works on GitHub Actions secrets
+    # OPENROUTER — raw requests, reads key directly from env
+    # Uses openrouter/auto first (never 404s), then specific
+    # free models as fallback
     # =====================================================
 
     if not OPENROUTER_API_KEY:
@@ -409,6 +416,8 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         return or_content
                     else:
                         print(f"⚠️ OPENROUTER empty response: {model_name}")
+                elif or_resp.status_code == 404:
+                    print(f"❌ OPENROUTER 404 (model removed): {model_name} — skipping")
                 else:
                     print(f"❌ OPENROUTER HTTP {or_resp.status_code}: {model_name}")
                     print(or_resp.text[:300])
