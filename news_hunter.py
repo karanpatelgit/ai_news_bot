@@ -21,6 +21,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 load_dotenv()
 
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -45,6 +46,7 @@ LOCAL_NEWS_BONUS = 2.0
 groq_client = None
 samba_client = None
 hf_client = None
+openrouter_client = None
 
 # =========================================================
 # GROQ
@@ -85,6 +87,24 @@ if HF_TOKEN:
     except Exception as e:
         print("❌ HF ERROR:", e)
 
+
+# =========================================================
+# OPENROUTER CLIENT
+# =========================================================
+
+
+if OPENROUTER_API_KEY:
+    try:
+        openrouter_client = OpenAI(
+            api_key=OPENROUTER_API_KEY,
+            base_url="https://openrouter.ai/api/v1"
+        )
+
+        print("✅ OPENROUTER READY")
+
+    except Exception as e:
+        print("❌ OPENROUTER INIT ERROR:", e)
+
 # =========================================================
 # MODELS
 # =========================================================
@@ -100,6 +120,11 @@ SAMBANOVA_MODELS = [
 
 HF_MODELS = [
     "meta-llama/Meta-Llama-3-8B-Instruct"
+]
+OPENROUTER_MODELS = [
+    "deepseek/deepseek-chat-v3-0324:free",
+    "qwen/qwen3-32b:free",
+    "google/gemma-3-27b-it:free"
 ]
 
 # =========================================================
@@ -266,9 +291,13 @@ def process_single_entry(entry, category):
 
 def generate_ai_response(prompt):
 
+    # =====================================================
     # GROQ
+    # =====================================================
+
     if groq_client:
         for model_name in GROQ_MODELS:
+
             try:
                 print(f"🔥 USING GROQ: {model_name}")
 
@@ -292,9 +321,13 @@ def generate_ai_response(prompt):
             except Exception as e:
                 print("❌ GROQ FAILED:", e)
 
+    # =====================================================
     # SAMBANOVA
+    # =====================================================
+
     if samba_client:
         for model_name in SAMBANOVA_MODELS:
+
             try:
                 print(f"🔥 USING SAMBANOVA: {model_name}")
 
@@ -318,9 +351,13 @@ def generate_ai_response(prompt):
             except Exception as e:
                 print("❌ SAMBANOVA FAILED:", e)
 
-    # HF
+    # =====================================================
+    # HUGGINGFACE
+    # =====================================================
+
     if hf_client:
         for model_name in HF_MODELS:
+
             try:
                 print(f"🔥 USING HF: {model_name}")
 
@@ -344,8 +381,168 @@ def generate_ai_response(prompt):
             except Exception as e:
                 print("❌ HF FAILED:", e)
 
-    return "AI generation failed"
+    # =====================================================
+    # OPENROUTER
+    # =====================================================
 
+    if openrouter_client:
+        for model_name in OPENROUTER_MODELS:
+
+            try:
+                print(f"🔥 USING OPENROUTER: {model_name}")
+
+                response = openrouter_client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=0.8,
+                    max_tokens=700
+                )
+
+                content = response.choices[0].message.content
+
+                if content:
+                    return content
+
+            except Exception as e:
+                print(f"❌ OPENROUTER FAILED: {model_name}")
+                print(e)
+
+    # =====================================================
+    # SMART FALLBACK FORMATTER
+    # =====================================================
+
+    print("\n⚠️ USING SMART FALLBACK FORMATTER")
+
+    try:
+
+        # Extract title
+        title_match = re.search(
+            r"NEWS TITLE:\s*(.+)",
+            prompt
+        )
+
+        # Extract category
+        category_match = re.search(
+            r"CATEGORY:\s*(.+)",
+            prompt
+        )
+
+        # Extract article
+        article_match = re.search(
+            r"FULL ARTICLE:\s*(.+?)SOURCE LINK:",
+            prompt,
+            re.DOTALL
+        )
+
+        # Extract link
+        link_match = re.search(
+            r"SOURCE LINK:\s*(.+)",
+            prompt
+        )
+
+        headline = (
+            title_match.group(1).strip()
+            if title_match else "Breaking News"
+        )
+
+        category = (
+            category_match.group(1).strip()
+            if category_match else "News"
+        )
+
+        article_text = (
+            article_match.group(1).strip()
+            if article_match else headline
+        )
+
+        link = (
+            link_match.group(1).strip()
+            if link_match else ""
+        )
+
+        # Clean article
+        article_text = article_text.replace("\n", " ")
+
+        # Split sentences
+        sentences = re.split(
+            r'(?<=[.!?]) +',
+            article_text
+        )
+
+        important_lines = []
+
+        for sentence in sentences:
+
+            sentence = sentence.strip()
+
+            if len(sentence) > 40:
+                important_lines.append(sentence)
+
+            if len(important_lines) >= 4:
+                break
+
+        # Create summary
+        summary = "\n\n".join([
+            f"• {line}"
+            for line in important_lines
+        ])
+
+        # Generate hashtags
+        hashtags = (
+            f"#{category.replace(' ', '')} "
+            "#BreakingNews "
+            "#IndiaNews "
+            "#ViralNews"
+        )
+
+        # Final fallback post
+        fallback_post = f"""
+🔥 BREAKING NEWS
+
+📰 {headline}
+
+📂 Category: {category}
+
+━━━━━━━━━━━━━━━
+
+{summary}
+
+━━━━━━━━━━━━━━━
+
+🤔 आपकी क्या राय है?
+
+📢 ऐसी ही खबरों के लिए follow करें।
+
+🔗 Source:
+{link}
+
+{hashtags}
+
+Emotion Score: 6/10
+Virality Score: 6/10
+Political Toxicity: 1/10
+"""
+
+        return fallback_post
+
+    except Exception as e:
+
+        print("❌ SMART FALLBACK ERROR:", e)
+
+        return """
+🔥 BREAKING NEWS
+
+News update available.
+
+Emotion Score: 5/10
+Virality Score: 5/10
+Political Toxicity: 0/10
+"""
 # =========================================================
 # RSS FEEDS
 # =========================================================
