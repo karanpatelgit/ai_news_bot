@@ -733,6 +733,10 @@ for row in filtered_news:
     # SMART SCORING WITH INTEGRATED TREND FACTOR
     # =====================================================
 
+# =====================================================
+    # SMART SCORING WITH TARGETED AUDIENCE KEYWORDS
+    # =====================================================
+
     headline_lower = headline.lower()
     headline_words = re.findall(r'\w+', headline_lower)
 
@@ -740,51 +744,209 @@ for row in filtered_news:
     geo_score = 0
     emotion_bonus = 0
     controversy_bonus = 0
-    trending_score = 0  # Initialize new factor
+    local_bonus = 0
+    trending_score = 0 
 
-    # Match tokens against our dynamic trend profiles
+    # Dynamic YouTube + Cross-Coverage Trends
     for word in headline_words:
         if word in trending_keywords:
             trending_score += trending_keywords[word]
         if word in headline_frequencies:
-            # Score bumps up if multiple news outlets are running matching keywords
             trending_score += (headline_frequencies[word] * 0.20)
 
-    # Normalize trending score to keep it balanced (Cap its top value at 5.0)
     trending_score = min(round(trending_score, 2), 5.0)
 
-    HIGH_PRIORITY_KEYWORDS = [
-        "modi", "india", "pakistan", "china", "army", 
-        "attack", "war", "trump", "terror", "breaking", 
-        "alert", "israel"
+    # 1. Local Audience Keyword Matching
+    LOCAL_WORDS = [
+    # --- CORE DISTRICTS & MICRO-REGIONS (English & Hindi) ---
+    "kushinagar", "gorakhpur", "hata", "padrauna", "maharajganj", "deoria", "basti", "ghaziapur", 
+    "azamgarh", "lucknow", "varanasi", "ballia", "mau", "jaunpur", "chauri chaura", "gonda", 
+    "bahraich", "ayodhya", "siddharthnagar", "sant kabir nagar", "sultanpur", "amethi", "mirzapur", 
+    "ghazipur", "ballia", "chandauli", "sonbhadra", "bhojpur", "purvanchal", "uttar pradesh", "up news",
+    "कुशीनगर", "गोरखपुर", "हाटा", "पडरौना", "महराजगंज", "देवरिया", "पूर्वांचल", "उत्तर प्रदेश", "यूपी", 
+    "बस्ती", "गाजीपुर", "बनारस", "मऊ", "बलिया", "जौनपुर", "चौरी चौरा", "अयोध्या", "सिद्धार्थनगर",
+    
+    # --- KUSHINAGAR & GORAKHPUR SUB-DIVISIONS / BLOCKS / TOWNS ---
+    "kasia", "tamkuhi", "tamkuhi raj", "khadda", "captainganj", "ramkola", "seorahi", "fazilnagar", 
+    "sukrauli", "dudhai", "neboua", "nautanwa", "anandnagar", "pharenda", "campierganj", "pipraich", 
+    "gola", "khajni", "bansgaon", "sahjanwa", "barhalganj", "kauriram", "belaon", "urwa", "chargaon",
+    "कसया", "तमकुही", "खड्डा", "कप्तानगंज", "रामकोला", "सेवरही", "फाजिलनगर", "सुकरौली", "नौतनवा", 
+    "कैम्पियरगंज", "पिपराइच", "गोला", "खजनी", "बांसगांव", "सहजनवा", "बड़हलगंज", "कौड़ीराम", "चरगाँव",
+    
+    # --- LOCAL VILLAGES, CHOWKS & HISTORICAL STATIONS ---
+    "kasya", "bodh gaya", "buddha", "parnirvana", "thuthibari", "sonauli", "chhitauni", "salempur", 
+    "barhaj", "rudrapur", "gaura", "bhatni", "lar", "patherdeva", "tarkulwa", "desahi", "baitalpur", 
+    "gauri bazar", "bhaluani", "kaptanganj", "siswa", "nichlaul", "mithauna", "धानी", "सिसवा", "निचलौल",
+    "मीठाउना", "ठूठीबारी", "सनौली", "छितौनी", "सलेमपुर", "बरहज", "रुद्रपुर", "भाटपार", "भटनी", "लार",
+    
+    # --- REGIONAL FIGURES, SURNAMES & LOCAL CONTEXTS ---
+    "yogi", "adityanath", "yogi adityanath", "gorakhnath", "peeth", "mahant", "योगी", "आदित्यनाथ", 
+    "गोरखनाथ", "पीठ", "महंत", "up police", "gkp", "stf", "upstf", "dial 112", "daroga", "thana", 
+    "kotwali", "chowki", "sp office", "dm office", "vda", "gda", "nagarpalika", "pradhan", "bdo",
+    "दारोगा", "थाना", "कोतवाली", "चौकी", "प्रधान", "बीडीओ", "सिपाही", "दबंग", "मुख्तार", "अंसारी",
+    
+    # --- GEOGRAPHICAL & HIGH-TRAFFIC LOCAL TERM VARIANTS ---
+    "bhojpuri", "bhojpuriya", "purvanchali", "ghaghra", "gandak", "rapti", "rohin", "ami", "kuwano", 
+    "sarayu", "boating accident", "floods", "purvanchal expressway", "gorakhpur link", "aiims gorakhpur", 
+    "brd medical college", "mmmut", "ddu", "kushinagar international airport", "buddha relics",
+    "भोजपुरी", "पूर्वांचली", "घाघरा", "गंडक", "राप्ती", "सरयू", "बाढ़", "एक्सप्रेसवे", "एम्स", "बीआरडी",
+    
+    # --- EXTENSIVE UP/PURVANCHAL ADMINISTRATIVE TOWNS & BLOCKS ---
+    "menhdawal", "khalilabad", "hainsarbazar", "bangaon", "harraiya", "captainganj", "rudhauli", 
+    "bhanpur", "itwa", "domariaganj", "shohratgarh", "naugarh", "bansi", "alapur", "jalalpur", 
+    "tanda", "akbarpur", "bhiti", "katehari", "maharajganj", "sagri", "gopalpur", "azamgarh city", 
+    "nizamabad", "phoolpur", "didarganj", "lalganj", "mehnagar", "mubarakpur", "ghosi", "madhuban", 
+    "mohammadabad", "kopaganj", "rasra", "bansdih", "sikanderpur", "phephna", "bairia", "zahoorabad", 
+    "saidpur", "zamania", "muhammadabad", "jakhanian", "kerakat", "machhlishahr", "mariahu", "shahganj", 
+    "mungra badshahpur", "malhani", "pindra", "shivpur", "cantt", "ajagara", "rohania", "sevapuri",
+    "खलीलाबाद", "हरैया", "रुधौली", "इटवा", "डुमरियागंज", "शोहरतगढ़", "नौगढ़", "बांसी", "जलालपुर", 
+    "टांडा", "अकबरपुर", "सगरी", "निज़ामबाद", "फूलपुर", "दीदारगंज", "लालगंज", "मऊनाथ", "घोषी", "मधुबन",
+    "रसड़ा", "बांसडीह", "सिकंदरपुर", "फेफना", "बैरिया", "जमानिया", "जखनिया", "केराकत", "मछलीशहर", "मड़ियाहू",
+    
+    # --- HYPER-LOCAL VILLAGE / SMALL TOWN CONNECTIONS ---
+    "asuran", "golghar", "buxipur", "mohaddipur", "taramandal", "medical road", "singharia", 
+    "bargadwa", "shahpur", "tiwaripur", "rajendra nagar", "shastri nagar", "civil lines", "naushad", 
+    "transport nagar", "gita press", "surajkund", "gorakhnath temple", "ramgarhtal", "leela",
+    "असुरन", "गोलघर", "बक्शीपुर", "मोहद्दीपुर", "तारामंडल", "बरगदवा", "शाहपुर", "तिवारीपुर", "नौसड़", 
+    "गीता प्रेस", "सूरजकुंड", "रामगढ़ताल", "गोरखनाथ मंदिर", "कौवाबाग", "पादरी बाजार", "झरना टोला",
+    
+    # --- ADDITIONAL LOCAL IDENTIFIERS TO GUARANTEE 300+ CAPTURE ---
+    "kasya raj", "matha kaur", "ramabhar", "stupa", "wat thai", "linh son", "burmese temple", 
+    "tibetan monastery", "shahi masjid", "kurmaghat", "narayani river", "choti gandak", "bansi river", 
+    "ghaghra bridge", "dohrighat", "barhaj ghat", "ayodhya ram mandir route", "purvanchal handloom", 
+    "terracotta", "bhathat", "jangal kauria", "pali", "sahjanwa industrial", "gida", "unwal", 
+    "piprauli", "khorabar", "bramhpur", "gayanpur", "gopalpur chowk", "paniyara", "partawal", 
+    "shyamdeurawa", "bhagwanpur", "bridgemanganj", "kolhui", "purandarpur", "lakhima", "sonauli border", 
+    "belahiya", "valmiki nagar", "bagaha", "narkatiaganj", "chanpatia", "bettiah", "motihari"
     ]
+    for keyword in LOCAL_WORDS:
+        if keyword in headline_lower:
+            local_bonus += 2.0  # Heavy boost for their home region
 
+    # 2. National & Political High-Priority Matching
+   HIGH_PRIORITY_KEYWORDS = [
+    # --- CENTRAL GOVERNMENT & BJP APPARATUS ---
+    "modi", "narendra modi", "bjp", "amit shah", "jp nadda", "rajnath singh", "nirmala sitharaman", 
+    "s jaishankar", "nitin gadkari", "yogi", "pmo", "pmo india", "nda", "rss", "mohan bhagwat", 
+    "lok sabha", "rajya sabha", "parliament", "sansad", "cabinet decision", "central govt",
+    "मोदी", "नरेन्द्र मोदी", "भाजपा", "अमित शाह", "नड्डा", "राजनाथ", "जयशंकर", "गडकरी", "पीएमओ", 
+    "संसद", "लोकसभा", "राज्यसभा", "मंत्रिमंडल", "कैबिनेट", "केंद्र सरकार", "आरएसएस", "मोहन भागवत",
+    
+    # --- OPPOSITION ALLIANCE & STATE LEADERSHIP ---
+    "rahul gandhi", "priyanka gandhi", "sonia gandhi", "congress", "inc", "kharge", "akhilesh", 
+    "yadav", "dimple yadav", "kejriwal", "aap", "mamata banerjee", "tmc", "stalin", "nitish kumar", 
+    "jdu", "rjd", "tejashwi", "lalu yadav", "mayawati", "bsp", "india alliance", "mva", "sharad pawar",
+    "राहुल गांधी", "प्रियंका", "कांग्रेस", "खड़गे", "अखिलेश यादव", "डिंपल", "केजरीवाल", "आप", "ममता", 
+    "नीतीश कुमार", "तेजस्वी", "लालू यादव", "मायावती", "बसपा", "सपा", "विपक्ष", "इंडिया गठबंधन",
+    
+    # --- ELECTIONS, SEATS & CAMPAIGNS ---
+    "election", "chunav", "voting", "matdan", "evm", "vvpat", "booth capturing", "exit poll", 
+    "opinion poll", "by-poll", "voter id", "nomination", "rally", "jan sabha", "code of conduct",
+    "चुनाव", "मतदान", "वोटिंग", "ईवीएम", "एग्जिट पोल", "नामांकन", "रैली", "जनसभा", "आचार संहिता",
+    
+    # --- LAW, JUDICIARY & INVESTIGATIVE AGENCIES ---
+    "police", "arrest", "court", "supreme court", "high court", "cj", "ed", "cbi", "raid", "encounter", 
+    "jail", "custody", "bailable", "non-bailable", "fir", "charge sheet", "summons", "interrogation", 
+    "stf", "nia", "income tax", "it raid", "judgement", "verdict", "anticipatory bail", "warrant",
+    "पुलिस", "गिरफ्तार", "कोर्ट", "सुप्रीम कोर्ट", "हाई कोर्ट", "जज", "ईडी", "सीबीआई", "छापा", "रेड", 
+    "एनकाउंटर", "जेल", "हिरासत", "जमानत", "एफआईआर", "चार्जशीट", "समन", "पूछताछ", "एनआईए", "वारंट",
+    
+    # --- MILITARY, DEFENSE & WARFARE ---
+    "pakistan", "china", "army", "attack", "war", "israel", "gaza", "iran", "border", "loc", "lac", 
+    "iaf", "navy", "surgical strike", "drone", "missile", "agniveer", "agnipath", "iaf fighter", 
+    "sukhoi", "rafale", "drdo", "indian army", "bsh", "crpf", "bsf", "itbp", "nsg", "terrorist", 
+    "encounter", "infiltration", "commanders", "nuclear", "submarines", "aircraft carrier",
+    "पाकिस्तान", "चीन", "सेना", "हमला", "युद्ध", "इजरायल", "गाजा", "ईरान", "बॉर्डर", "एलओसी", "राफेल", 
+    "अग्निवीर", "सर्जिकल स्ट्राइक", "ड्रोन", "मिसाइल", "आतंकवादी", "घुसपैठ", "परमाणु", "फौजी", "जवान",
+    
+    # --- GLOBAL POWER PLAYERS & CHANNELS ---
+    "trump", "donald trump", "putin", "russia", "biden", "america", "us news", "white house", 
+    "kremlin", "pentagon", "united nations", "unsc", "nato", "zelensky", "ukraine war", "xi jinping", 
+    "beijing", "washington", "london", "downing street", "bbc", "reuters", "al jazeera",
+    "ट्रम्प", "पुतिन", "रूस", "बिडेन", "अमेरिका", "व्हाइट हाउस", "नाटो", "यूक्रेन", "शी जिनपिंग",
+    
+    # --- SCHEMES, ECONOMIC REFORMS & PUBLIC INFRASTRUCTURE ---
+    "gst", "income tax slab", "budget", "rbi", "repo rate", "inflation", "gdp", "share market", 
+    "nifty", "sensex", "sebi", "ipo", "crypto", "bitcoin", "vande bharat", "bullet train", "nhai", 
+    "highway", "toll plaza", "ayushman bharat", "pm kisan", "ration card", "freebie", "subsidy",
+    "बजट", "महंगाई", "शेयर बाजार", "सेंसेक्स", "निफ्टी", "क्रिप्टो", "वंदे भारत", "हाइवे", "टोल प्लाजा",
+    
+    # --- NATIONAL COMPETITIVE EXAMS, LEAKS & SYSTEMIC SCAMS ---
+    "neet", "paper leak", "scam", "railway", "rrb", "ssc", "exam cancel", "leak", "fraud", "bribe", 
+    "cgl", "upsc", "paper लीक", "घोटाला", "nta", "answer key", "cutoff", "result out", "cheating", 
+    "dummy candidate", "solvers gang", "marks rigging", "re-exam", "grace marks", "uproar",
+    "नीट", "पेपर लीक", "घोटाला", "रेलवे", "परीक्षा रद्द", "धांधली", "रिजल्ट", "धोखाधड़ी", "रिश्वत"
+    ]
     for keyword in HIGH_PRIORITY_KEYWORDS:
         if keyword in headline_lower:
             india_score += 1.5
 
-    EMOTIONAL_WORDS = [
-        "shock", "fear", "warning", "danger", 
-        "viral", "anger", "violence", "protest"
+    # 3. Emotional & Sensational Triggers
+   EMOTIONAL_WORDS = [
+    # --- HIGH-VELOCITY ENGLISH SENSATIONALISM ---
+    "shock", "fear", "warning", "danger", "viral", "anger", "violence", "protest", "ebola", "virus", 
+    "outbreak", "alert", "breaking", "urgent", "hazard", "panic", "expose", "mystery", "miracle", 
+    "tragedy", "disaster", "catastrophe", "scandal", "shameful", "horrific", "brutal", "deadly", 
+    "conspiracy", "covert", "hidden camera", "caught on camera", "live stream", "unbelievable", 
+    "bizarre", "myth", "haunted", "incident", "accident", "clash", "riot", "tension", "stampede",
+    
+    # --- INTENSE HINDI CLICK-THROUGH HOOKS (High Facebook Click-Through Rate) ---
+    "सावधान", "बड़ी खबर", "खुलासा", "हादसा", "मौत", "हड़कंप", "सनसनी", "खौफ", "शर्मनाक", "चमत्कार", 
+    "धोखा", "तबाही", "खतरा", "चेतावनी", "लाइव वीडियो", "सच्चाई", "मच गया बवाल", "रोंगटे खड़े", "दहशत",
+    "सीसीटीवी", "शर्मसार", "भयंकर", "दर्दनाक", "बड़ी लापरवाही", "सनसनीखेज", "कांप उठी रूह", "देखें वीडियो",
+    "खौफनाक", "दिल दहला देने वाला", "अंधविश्वास", "बवाल", "हंगामा", "आक्रोश", "गुस्सा", "मातम", "चीख-पुकार",
+    "खूनी खेल", "वारदात", "भंडाफोड़", "काली करतूत", "सच्चा चेहरा", "गुप्त", "रहस्य", "अजीबोगरीब",
+    
+    # --- SOCIAL CRIME, OUTRAGE & INVESTIGATION ---
+    "क्राइम", "मर्डर", "हादसा", "भूकंप", "आग लगी", "लूट", "गैंग", "बलात्कार", "गैंगस्टर", "माफिया", 
+    "बदमाश", "गोलीबारी", "मर्डर केस", "फिरौती", "किडनैपिंग", "अपहरण", "डकैती", "चोरी", "फिरौती", 
+    "शूटर", "सुपारी", "शव बरामद", "लाश", "हत्याकांड", "गोली मारकर हत्या", "चाकूबाजी", "एसिड अटैक",
+    "रेप", "गैंगरेप", "उत्पीड़न", "घूसखोर", "रंगे हाथ", "ब्लैकमेल", "साइबर ठगी", "हनीट्रैप", "फर्जीवाड़ा",
+    "ठग", "जालसाज", "माफिया राज", "बुलडोजर", "कुर्की", "गैंगवार", "हिस्ट्रीशीटर", "इनामी बदमाश",
+    
+    # --- ACCIDENTS, NATURAL HAZARDS & EMERGENCIES ---
+    "blast", "explosion", "fire", "derailment", "train crash", "plane crash", "collision", "head-on", 
+    "hit and run", "drowning", "lightning", "earthquake", "cloudburst", "landslide", "heatwave", 
+    "cylinder blast", "short circuit", "building collapse", "bridge collapse", "poisonous", "gas leak",
+    "धमाका", "विस्फोट", "आगजनी", "ट्रेन हादसा", "पटरी से उतरी", "टक्कर", "हिट एंड रन", "डूबने से मौत",
+    "आकाशीय बिजली", "बादल फटा", "लैंडस्लाइड", "सिलेंडर ब्लास्ट", "शॉर्ट सर्किट", "जहरीली गैस", "दम घुटने",
+    
+    # --- REEL/VIRAL INTERNET ENGAGEMENT & OUTRAGE SENSORS ---
+    "trending", "viral reel", "facebook trend", "instagram viral", "twitter fight", "boycott", 
+    "trolled", "public bashing", "slapped", "abused", "viral audio", "leaked video", "crying video", 
+    "suicide note", "last video", "stunt video", "speeding car", "fight video", "road rage", 
+    "drunk driving", "high speed", "reckless", "suspension", "terminated", "action taken",
+    "ट्रेंडिंग", "वायरल रील", "ट्विटर वॉर", "बॉयकाट", "ट्रोल", "पब्लिक ने पीटा", "थप्पड़", "गालीगलौज",
+    "वायरल ऑडियो", "लीक वीडियो", "रोते हुए", "स्टंट वीडियो", "रोड रेज", "नशे में धुत", "सस्पेंड", "बर्खास्त"
     ]
-
     for word in EMOTIONAL_WORDS:
         if word in headline_lower:
-            emotion_bonus += 1
+            emotion_bonus += 1.2
 
-    if category in [
-        "India Politics",
-        "India Pakistan",
-        "India China",
-        "Defense"
-    ]:
+    if category in ["India Politics", "India Pakistan", "India China", "Defense"]:
         geo_score += 3
 
-    if category in [
-        "Crime",
-        "Breaking"
-    ]:
+    if category in ["Crime", "Breaking"]:
         controversy_bonus += 2
+
+    # =====================================================
+    # PRE-AI SCORE GATE (UPDATED WITH LOCAL BONUS MATRIX)
+    # =====================================================
+
+    raw_score = (
+        india_score * 1.3 +
+        geo_score * 1.0 +
+        trending_score * 1.5 +  
+        emotion_bonus * 1.2 +
+        controversy_bonus * 1.0 +
+        local_bonus * 1.5       # Injection of targeted local keywords score
+    )
+
+    if is_local or category in ['Kushinagar', 'Gorakhpur']:
+        raw_score += LOCAL_NEWS_BONUS
+
+    raw_score = round(raw_score, 2)
+    print(f"📊 TARGETED PRE SCORE: {raw_score}")
 
     # =====================================================
     # PRE-AI SCORE GATE (UPDATED WITH WEIGHTS)
@@ -890,6 +1052,7 @@ Source Link: {link}
             india_score * 0.15 +
             geo_score * 0.10 +
             emotion_bonus * 0.05 +
+            local_bonus* 0.10 +
             controversy_bonus * 0.05 -
             toxicity_score * 0.05
         )
