@@ -101,10 +101,18 @@ SAMBANOVA_MODELS = ["Meta-Llama-3.3-70B-Instruct"]
 HF_MODELS = ["meta-llama/Meta-Llama-3-8B-Instruct"]
 
 OPENROUTER_MODELS = [
+    # Auto-router: OpenRouter picks best available free model automatically
     "openrouter/auto",
+
+    # Manually listed current working free models as backup order
     "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
-    "qwen/qwen3-8b:free"
+    "google/gemini-2.5-flash:free",
+    "google/gemini-2.5-pro:free",
+    "google/gemma-2-9b-it:free",
+    "mistralai/mistral-7b-instruct:free",
+    "microsoft/phi-3-medium-128k-instruct:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "deepseek/deepseek-chat:free"
 ]
 
 # =========================================================
@@ -311,56 +319,50 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     break
                 print("❌ HF FAILED:", e)
 
-    # OPENROUTER ENGINE LOOP
+    # =====================================================
+    # OPENROUTER — raw requests, reads key directly from env
+    # =====================================================
+
     if not OPENROUTER_API_KEY:
         print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter")
     else:
         for model_name in OPENROUTER_MODELS:
-            for attempt in range(3):
-                try:
-                    print(f"🔥 USING OPENROUTER: {model_name}")
-                    or_resp = requests.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                            "Content-Type": "application/json",
-                            "HTTP-Referer": "https://github.com/",
-                            "X-Title": "News Hunter Bot Matrix"
-                        },
-                        json={
-                            "model": model_name,
-                            "messages": [{"role": "user", "content": prompt}],
-                            "temperature": 0.8,
-                            "max_tokens": 2048
-                        },
-                        timeout=60
-                    )
+            try:
+                print(f"🔥 USING OPENROUTER: {model_name}")
 
-                    if or_resp.status_code == 200:
-                        or_data    = or_resp.json()
-                        or_content = or_data["choices"][0]["message"]["content"]
-                        if or_content and or_content.strip():
-                            print(f"✅ OPENROUTER SUCCESS: {model_name}")
-                            return or_content
-                    elif or_resp.status_code == 429:
-                        wait = 5 * (2 ** attempt)
-                        print(f"⚠️ OPENROUTER 429 Rate Limit for {model_name}. Sleeping {wait}s...")
-                        time.sleep(wait)
-                    elif or_resp.status_code == 402:
-                        print("❌ OPENROUTER 402 (Insufficient Credits) — skipping loop completely.")
-                        break
-                    elif or_resp.status_code == 404:
-                        print(f"❌ OPENROUTER 404 (Model Removed): {model_name} — skipping.")
-                        break
+                or_resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://github.com/",
+                        "X-Title": "News Hunter Bot Matrix"
+                    },
+                    json={
+                        "model": model_name,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.8,
+                        "max_tokens": 2048
+                    },
+                    timeout=60
+                )
+
+                if or_resp.status_code == 200:
+                    or_data    = or_resp.json()
+                    or_content = or_data["choices"][0]["message"]["content"]
+                    if or_content and or_content.strip():
+                        print(f"✅ OPENROUTER SUCCESS: {model_name}")
+                        return or_content
                     else:
-                        print(f"❌ OPENROUTER HTTP {or_resp.status_code}: {model_name}")
-                        break
-                except Exception as e:
-                    print(f"❌ OPENROUTER FAILED: {model_name} — {e}")
-                    break
-            else:
-                continue
-            break
+                        print(f"⚠️ OPENROUTER empty response: {model_name}")
+                elif or_resp.status_code == 404:
+                    print(f"❌ OPENROUTER 404 (model removed): {model_name} — skipping")
+                else:
+                    print(f"❌ OPENROUTER HTTP {or_resp.status_code}: {model_name}")
+                    print(or_resp.text[:300])
+
+            except Exception as e:
+                print(f"❌ OPENROUTER FAILED: {model_name} — {e}")
 
     # =====================================================
     # SMART FALLBACK FORMATTER
