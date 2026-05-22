@@ -266,8 +266,9 @@ def process_single_entry(entry, category):
             *published[:6]
         ).date()
         
-        # Today's date (UTC)
+        # Today's date (UTC) and now
         today = datetime.utcnow().date()
+        now = datetime.now(timezone.utc)
          
         # ONLY TODAY Only 8 hrs before
         if now - published_datetime <= timedelta(hours=8):
