@@ -929,54 +929,35 @@ for row in filtered_news:
     if category in ["Crime", "Breaking"]:
         controversy_bonus += 2
 
-    # =====================================================
-    # PRE-AI SCORE GATE (UPDATED WITH LOCAL BONUS MATRIX)
+  # =====================================================
+    # PRE-AI SCORE GATE (UPDATED WEIGHT DISTRIBUTION)
     # =====================================================
 
     raw_score = (
         india_score * 1.3 +
         geo_score * 1.0 +
-        trending_score * 1.5 +  
+        trending_score * 1.5 +  # Prioritizes active YouTube signals
         emotion_bonus * 1.2 +
         controversy_bonus * 1.0 +
-        local_bonus * 1.5       # Injection of targeted local keywords score
+        local_bonus * 1.5       # Strong bias toward your UP audience footprint
     )
 
     if is_local or category in ['Kushinagar', 'Gorakhpur']:
         raw_score += LOCAL_NEWS_BONUS
 
     raw_score = round(raw_score, 2)
-    print(f"📊 TARGETED PRE SCORE: {raw_score}")
+
+    print(f"📊 PRE SCORE (Dynamic Gate Analysis): {raw_score}")
 
     # =====================================================
-    # PRE-AI SCORE GATE (UPDATED WITH WEIGHTS)
+    # HARD GATE: PRE-AI LIMIT (Set to 5.5 to catch localized trends)
     # =====================================================
-
-    raw_score = (
-        india_score * 1.5 +
-        geo_score * 1.2 +
-        trending_score * 1.5 +  # Heavy priority multiplier for real-time trending topics
-        emotion_bonus * 1.0 +
-        controversy_bonus * 1.0
-    )
-
-    if is_local:
-        raw_score += LOCAL_NEWS_BONUS
-
-    raw_score = round(raw_score, 2)
-
-    print(f"📊 PRE SCORE (Dynamic Trend Included): {raw_score}")
-
-    # =====================================================
-    # HARD GATE
-    # =====================================================
-
-    if raw_score < 5:
-        print(f"⏭️ SKIPPED LOW SCORE NEWS: {headline}")
+    if raw_score < 5.5:
+        print(f"⏭️ SKIPPED LOW PRE-SCORE: {headline} ({raw_score})")
         continue
 
-    print("✅ SCORE PASSED — GENERATING AI CONTENT")
-
+    print("✅ PRE-SCORE PASSED — RUNNING ENGINE")
+    
     prompt = f"""
 You are an elite viral  news content writer, Facebook monetization strategist, and social media journalist in Hindi Language .
 
@@ -1041,33 +1022,31 @@ Source Link: {link}
             toxicity_match.group(1)
         ) if toxicity_match else 0
 
-        # =====================================================
-        # FINAL SCORE MATRIX (BALANCED TO ACCOMMODATE TRENDING)
+      # =====================================================
+        # FINAL SCORE MATRIX 
         # =====================================================
 
         final_score = (
             virality_score * 0.25 +
             emotion_score * 0.20 +
-            trending_score * 0.20 +  # 20% total allocation towards calculated trend score
+            trending_score * 0.20 +  
             india_score * 0.15 +
             geo_score * 0.10 +
             emotion_bonus * 0.05 +
-            local_bonus* 0.10 +
             controversy_bonus * 0.05 -
             toxicity_score * 0.05
         )
 
-        if is_local:
+        if is_local or category in ['Kushinagar', 'Gorakhpur']:
             final_score += LOCAL_NEWS_BONUS
 
         final_score = round(final_score, 2)
 
         # =====================================================
-        # SCORE GATE
+        # HARD GATE: FINAL SCORE LIMIT (Set to 6.0)
         # =====================================================
-
-        if final_score < 5:
-            print(f"⏭️ SKIPPED LOW SCORE NEWS: {final_score}")
+        if final_score < 6.0:
+            print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
         # =====================================================
