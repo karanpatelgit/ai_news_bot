@@ -20,15 +20,32 @@ from difflib import SequenceMatcher
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-load_dotenv()
+# GitHub Actions: secrets are env vars — no .env file needed
+# Local dev: create a .env file and load_dotenv() will pick it up
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass  # On GitHub Actions dotenv is optional
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY")
-HF_TOKEN = os.getenv("HF_TOKEN")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+GROQ_API_KEY       = os.environ.get("GROQ_API_KEY", "").strip()
+SAMBANOVA_API_KEY  = os.environ.get("SAMBANOVA_API_KEY", "").strip()
+HF_TOKEN           = os.environ.get("HF_TOKEN", "").strip()
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+
+# Startup key check
+print("=" * 50)
+print("🔑 KEY STATUS:")
+print(f"   GROQ        : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
+print(f"   SAMBANOVA   : {'✅ SET' if SAMBANOVA_API_KEY else '❌ MISSING'}")
+print(f"   HF_TOKEN    : {'✅ SET' if HF_TOKEN else '❌ MISSING'}")
+print(f"   OPENROUTER  : {'✅ SET — ' + OPENROUTER_API_KEY[:8] + '...' if OPENROUTER_API_KEY else '❌ MISSING'}")
+print(f"   BOT_TOKEN   : {'✅ SET' if BOT_TOKEN else '❌ MISSING'}")
+print(f"   CHAT_ID     : {'✅ SET' if CHAT_ID else '❌ MISSING'}")
+print("=" * 50)
 
 # =========================================================
 # CONFIG
@@ -100,17 +117,6 @@ if OPENROUTER_API_KEY:
         print("✅ OPENROUTER READY")
     except Exception as e:
         print("❌ OPENROUTER INIT ERROR:", e)
-else:
-    print("⚠️ OPENROUTER_API_KEY missing from env — OpenRouter will use raw requests fallback")
-
-# Startup diagnostics
-print("=" * 50)
-print("🔑 KEY STATUS:")
-print(f"   GROQ        : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
-print(f"   SAMBANOVA   : {'✅ SET' if SAMBANOVA_API_KEY else '❌ MISSING'}")
-print(f"   HF_TOKEN    : {'✅ SET' if HF_TOKEN else '❌ MISSING'}")
-print(f"   OPENROUTER  : {'✅ SET' if OPENROUTER_API_KEY else '❌ MISSING'}")
-print("=" * 50)
 
 # =========================================================
 # MODELS (FIXED FREE OPENROUTER MODEL IDENTIFIERS)
@@ -312,27 +318,17 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
 
     if groq_client:
         for model_name in GROQ_MODELS:
-
             try:
                 print(f"🔥 USING GROQ: {model_name}")
-
                 response = groq_client.chat.completions.create(
                     model=model_name,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
+                    messages=[{"role": "user", "content": prompt}],
                     temperature=0.8,
                     max_tokens=2048
                 )
-
-                content = response.choices[0].message.content
-
-                if content:
-                    return content
-
+                result = response.choices[0].message.content
+                if result:
+                    return result
             except Exception as e:
                 print("❌ GROQ FAILED:", e)
 
@@ -342,27 +338,17 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
 
     if samba_client:
         for model_name in SAMBANOVA_MODELS:
-
             try:
                 print(f"🔥 USING SAMBANOVA: {model_name}")
-
                 response = samba_client.chat.completions.create(
                     model=model_name,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
+                    messages=[{"role": "user", "content": prompt}],
                     temperature=0.8,
                     max_tokens=2048
                 )
-
-                content = response.choices[0].message.content
-
-                if content:
-                    return content
-
+                result = response.choices[0].message.content
+                if result:
+                    return result
             except Exception as e:
                 print("❌ SAMBANOVA FAILED:", e)
 
@@ -372,61 +358,43 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
 
     if hf_client:
         for model_name in HF_MODELS:
-
             try:
                 print(f"🔥 USING HF: {model_name}")
-
                 response = hf_client.chat_completion(
                     model=model_name,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
+                    messages=[{"role": "user", "content": prompt}],
                     temperature=0.8,
                     max_tokens=2048
                 )
-
-                content = response.choices[0].message.content
-
-                if content:
-                    return content
-
+                result = response.choices[0].message.content
+                if result:
+                    return result
             except Exception as e:
                 print("❌ HF FAILED:", e)
 
     # =====================================================
-    # OPENROUTER — raw requests (bypasses openrouter_client
-    # None guard; works even if .env key name mismatches)
+    # OPENROUTER — raw requests, reads directly from env
+    # No client object: works on GitHub Actions secrets
     # =====================================================
 
-    _or_key = OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", "")
-
-    if not _or_key:
+    if not OPENROUTER_API_KEY:
         print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter")
     else:
         for model_name in OPENROUTER_MODELS:
-
             try:
                 print(f"🔥 USING OPENROUTER: {model_name}")
 
                 or_resp = requests.post(
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers={
-                        "Authorization": f"Bearer {_or_key}",
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                         "Content-Type": "application/json",
                         "HTTP-Referer": "https://github.com/",
                         "X-Title": "News Hunter Bot Matrix"
                     },
                     json={
                         "model": model_name,
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content": prompt
-                            }
-                        ],
+                        "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.8,
                         "max_tokens": 2048
                     },
@@ -434,7 +402,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 )
 
                 if or_resp.status_code == 200:
-                    or_data = or_resp.json()
+                    or_data    = or_resp.json()
                     or_content = or_data["choices"][0]["message"]["content"]
                     if or_content and or_content.strip():
                         print(f"✅ OPENROUTER SUCCESS: {model_name}")
@@ -446,8 +414,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     print(or_resp.text[:300])
 
             except Exception as e:
-                print(f"❌ OPENROUTER FAILED: {model_name}")
-                print(e)
+                print(f"❌ OPENROUTER FAILED: {model_name} — {e}")
 
     # =====================================================
     # SMART FALLBACK FORMATTER
@@ -457,7 +424,6 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
 
     try:
 
-        # Step 1: Structural backup verification
         if not headline or headline.strip() == "":
             title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
             headline = title_match.group(1).strip() if title_match else "Breaking News"
@@ -474,35 +440,27 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
             link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
             link = link_match.group(1).strip() if link_match else ""
 
-        # Step 2: Advanced text extraction
         clean_text = re.sub(r'\s+', ' ', article_text).strip()
-
-        sentences = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
+        sentences  = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
         important_lines = []
 
         for sentence in sentences:
             sentence = sentence.strip()
-
             if any(x in sentence.lower() for x in ["click here", "subscribe", "follow us", "read more", "advertisement", "copyright"]):
                 continue
-
             if len(sentence) > 30 and sentence.lower() not in headline.lower():
                 important_lines.append(sentence)
-
             if len(important_lines) >= 10:
                 break
 
-        # Emergency chunk fallback if fewer than 10 lines
         if len(important_lines) < 10:
-            if len(clean_text) > len(headline):
-                chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
-                for chunk in chunks:
-                    if len(chunk) > 25 and chunk not in important_lines:
-                        important_lines.append(chunk)
-                    if len(important_lines) >= 10:
-                        break
+            chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
+            for chunk in chunks:
+                if len(chunk) > 25 and chunk not in important_lines:
+                    important_lines.append(chunk)
+                if len(important_lines) >= 10:
+                    break
 
-        # Pad with Hindi placeholders if still under 10
         backup_points = [
             "इस महत्वपूर्ण घटनाक्रम के बाद संबंधित विभागों और प्रशासनिक टीमों को अलर्ट मोड पर रखा गया है।",
             "ग्राउंड जीरो पर मौजूद सुरक्षा बल और जांच एजेंसियां मामले की हर एक कड़ी को बारीकी से खंगाल रही हैं।",
@@ -515,11 +473,10 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 break
             important_lines.append(pt)
 
-        summary = "\n\n".join([f"• {line}" for line in important_lines[:12]])
-
+        summary  = "\n\n".join([f"• {line}" for line in important_lines[:12]])
         hashtags = f"#{category.replace(' ', '')} #BreakingNews #IndiaNews #ViralNews #FlashNews"
 
-        fallback_post = f"""
+        return f"""
 🔥 BREAKING NEWS
 
 📰 {headline}
@@ -545,7 +502,6 @@ Emotion Score: 6/10
 Virality Score: 6/10
 Political Toxicity: 1/10
 """
-        return fallback_post
 
     except Exception as e:
         print("❌ SMART FALLBACK CRITICAL ERROR:", e)
@@ -571,6 +527,7 @@ Emotion Score: 5/10
 Virality Score: 5/10
 Political Toxicity: 0/10
 """
+
 
 # =========================================================
 # RSS FEEDS
@@ -969,7 +926,7 @@ for row in filtered_news:
 
     print(f"📊 PRE SCORE (Dynamic Gate Analysis): {raw_score}")
 
-    if raw_score < 8.0:
+    if raw_score < 6.0:
         print(f"⏭️ SKIPPED LOW PRE-SCORE: {headline} ({raw_score})")
         continue
 
