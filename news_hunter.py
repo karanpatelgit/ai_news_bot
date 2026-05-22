@@ -672,50 +672,165 @@ for index, row in df_to_process.iterrows():
     print("=" * 80)
 
     prompt = f"""
-You are an elite viral content writer and social media journalist.
+You are an elite viral content writer, Facebook monetization strategist, and social media journalist.
 
-Write a HIGH-ENGAGEMENT Hindi viral social media article.
+Your task is to transform the given news/topic into a HIGH-ENGAGEMENT, MONETIZATION-OPTIMIZED Hindi social media article designed for:
+- Facebook monetization
+- Instagram engagement
+- Telegram virality
+- LinkedIn reach
+- X/Twitter discussions
+- YouTube community posts
 
-NEWS TITLE:
-{headline}
+The article must feel:
+- Human-written
+- Emotionally engaging
+- Trustworthy
+- Highly shareable
+- Curiosity-driven
+- Social-media optimized
 
-CATEGORY:
-{category}
+━━━━━━━━━━━━━━━
+PRIMARY GOAL
+━━━━━━━━━━━━━━━
 
-FULL ARTICLE:
-{article_text}
+Maximize:
+- Audience retention
+- Shares
+- Comments
+- Saves
+- Reactions
+- Follower growth
+- Organic reach
+- Facebook monetization potential
 
-SOURCE LINK:
-{link}
+━━━━━━━━━━━━━━━
+WRITING STYLE
+━━━━━━━━━━━━━━━
 
-INSTRUCTIONS:
-- Use conversational Hindi
-- Highly engaging tone
+Write in:
+- Conversational Hindi
+- Simple but powerful language
+- Natural storytelling tone
+- Mobile-friendly formatting
+
+Use:
+- Curiosity hooks
 - Emotional storytelling
-- Facebook monetization optimized
-- Mobile friendly
-- Use emojis strategically
-- Add curiosity and suspense
-- Avoid misinformation
-- Add hashtags
-- Add CTA
+- Strategic suspense
+- Punchy short paragraphs
+- Viral pacing
+- Human-like reactions
+- Strategic emojis
 
-OUTPUT FORMAT:
+Avoid:
+- Robotic AI wording
+- Repetitive lines
+- Fake information
+- Extreme clickbait
+- Overly formal language
+- Long boring paragraphs
 
-1. Viral Headline
-2. Opening Hook
-3. Main Article
-4. Key Highlights
-5. Public Reaction
-6. Engagement Question
-7. CTA
-8. Hashtags
+━━━━━━━━━━━━━━━
+OUTPUT FORMAT
+━━━━━━━━━━━━━━━
 
-At the end output EXACTLY:
+1️⃣ 🔥 VIRAL HEADLINE
+- Emotional + curiosity-based
+- Highly clickable
+- Natural sounding
+- Facebook optimized
 
-Emotion Score: X/10
-Virality Score: X/10
-Political Toxicity: X/10
+2️⃣ ⚡ OPENING HOOK (2–4 lines)
+- Instantly grab attention
+- Create suspense/emotion
+- Force users to continue reading
+
+3️⃣ 📰 MAIN ARTICLE
+Length: 400–800 words
+
+Must include:
+- What happened
+- Why it matters
+- Hidden angle/public emotion
+- Social/media reaction
+- Impact on people
+- Possible future consequences
+
+WRITING RULES:
+- Maintain suspense throughout
+- Use short paragraphs
+- Make every paragraph continue curiosity
+- Keep emotional flow natural
+- Use dramatic pacing without misinformation
+
+4️⃣ 📌 KEY HIGHLIGHTS
+- 3–7 important bullet points
+
+5️⃣ 🌍 PUBLIC REACTION SECTION
+Summarize how people/social media are reacting.
+
+6️⃣ 🧠 ENGAGEMENT SECTION
+Ask emotionally engaging questions such as:
+- “आपकी क्या राय है?”
+- “क्या ऐसा होना सही है?”
+- “क्या सरकार को कार्रवाई करनी चाहिए?”
+- “क्या आप इससे सहमत हैं?”
+
+7️⃣ 📢 CALL TO ACTION
+Encourage users to:
+- Comment
+- Share
+- Follow
+- Save the post
+- Join Telegram/WhatsApp channel
+
+8️⃣ 🔖 HASHTAGS
+Include:
+- Trending hashtags
+- Niche hashtags
+- Viral Hindi hashtags
+- Topic-specific hashtags
+
+━━━━━━━━━━━━━━━
+RETENTION & MONETIZATION RULES
+━━━━━━━━━━━━━━━
+
+- First 3 lines MUST be highly engaging
+- Every paragraph should increase curiosity
+- Optimize for mobile reading
+- Use emotional wording strategically
+- Increase comment potential naturally
+- Encourage debates/discussions
+- Keep readers till the end
+- Maximize Facebook organic reach
+
+━━━━━━━━━━━━━━━
+FACTUALITY RULES
+━━━━━━━━━━━━━━━
+
+- Stay factually accurate
+- Do not spread misinformation
+- Do not exaggerate beyond available facts
+- Clearly separate facts from reactions/speculation
+
+━━━━━━━━━━━━━━━
+INPUT DATA
+━━━━━━━━━━━━━━━
+
+Title: {title}
+
+Category: {category}
+
+Summary: {summary}
+
+Full Article: {article_text}
+
+Source: {source}
+
+Virality Score: {virality_score}
+
+Emotion Score: {emotion_score}
 """
 
     try:
@@ -780,7 +895,7 @@ Political Toxicity: X/10
             short_link = shorten_url(cleaned_link)
 
             telegram_message = f"""
-🔥 VIRAL NEWS
+🔥 VIRAL NEWS 
 
 📰 {headline}
 
@@ -790,16 +905,14 @@ Political Toxicity: X/10
 ❤️ Emotion: {emotion_score}/10
 🚀 Virality: {virality_score}/10
 ⚠️ Toxicity: {toxicity_score}/10
-
-🔗 Link:
-{short_link}
-
 ====================
 
 {ai_result}
 
 ====================
-
+🔗 News Source Link:
+{short_link}
+follow us on :
 📸 Instagram:
 https://www.instagram.com/karan_patel_kushinagar
 
