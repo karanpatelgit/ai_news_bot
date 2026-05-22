@@ -417,37 +417,17 @@ def generate_ai_response(prompt):
                 print(e)
 
     # =====================================================
-    # SMART FALLBACK FORMATTER
+    # SMART FALLBACK FORMATTER (FIXED & CASE-INSENSITIVE)
     # =====================================================
 
     print("\n⚠️ USING SMART FALLBACK FORMATTER")
 
     try:
-
-        # Extract title
-        title_match = re.search(
-            r"NEWS TITLE:\s*(.+)",
-            prompt
-        )
-
-        # Extract category
-        category_match = re.search(
-            r"CATEGORY:\s*(.+)",
-            prompt
-        )
-
-        # Extract article
-        article_match = re.search(
-            r"FULL ARTICLE:\s*(.+?)SOURCE LINK:",
-            prompt,
-            re.DOTALL
-        )
-
-        # Extract link
-        link_match = re.search(
-            r"SOURCE LINK:\s*(.+)",
-            prompt
-        )
+        # Re-extract values cleanly using case-insensitive flags (re.IGNORECASE)
+        title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
+        category_match = re.search(r"category:\s*(.+)", prompt, re.IGNORECASE)
+        article_match = re.search(r"(?:full article|article):\s*(.+?)(?:source link|link):", prompt, re.DOTALL | re.IGNORECASE)
+        link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
 
         headline = (
             title_match.group(1).strip()
@@ -469,43 +449,40 @@ def generate_ai_response(prompt):
             if link_match else ""
         )
 
-        # Clean article
-        article_text = article_text.replace("\n", " ")
+        # Clean article text formatting
+        article_text = article_text.replace("\n", " ").strip()
 
-        # Split sentences
-        sentences = re.split(
-            r'(?<=[.!?]) +',
-            article_text
-        )
-
+        # Split sentences dynamically to build the summary bullet points
+        sentences = re.split(r'(?<=[.!?]) +', article_text)
         important_lines = []
 
         for sentence in sentences:
-
             sentence = sentence.strip()
-
-            if len(sentence) > 40:
+            # If the article text is short (like a headline), catch everything available
+            if len(sentence) > 10:
                 important_lines.append(sentence)
-
-            if len(important_lines) >= 4:
+            if len(important_lines) >= 5:
                 break
 
-        # Create summary
+        # Fallback if no lines were processed cleanly
+        if not important_lines:
+            important_lines = [headline]
+
+        # Create structured summary bullet points
         summary = "\n\n".join([
             f"• {line}"
             for line in important_lines
         ])
 
-        # Generate hashtags
+        # Generate monetization hashtags
         hashtags = (
             f"#{category.replace(' ', '')} "
-            # Removed unescaped character symbol that was disrupting formatting
             "#BreakingNews "
             "#IndiaNews "
             "#ViralNews"
         )
 
-        # Final fallback post
+        # Final structurally complete fallback post block
         fallback_post = f"""
 🔥 BREAKING NEWS
 
@@ -536,14 +513,29 @@ Political Toxicity: 1/10
         return fallback_post
 
     except Exception as e:
-
-        print("❌ SMART FALLBACK ERROR:", e)
-
-        return """
+        print("❌ SMART FALLBACK CRITICAL ERROR:", e)
+        # Final emergency string backup so the process never pushes empty structures
+        return f"""
 🔥 BREAKING NEWS
 
-News update available.
+📰 {headline if 'headline' in locals() else 'New Update'}
 
+📂 Category: {category if 'category' in locals() else 'News'}
+
+━━━━━━━━━━━━━━━
+
+• {headline if 'headline' in locals() else 'Click source link below to read full breaking news coverage.'}
+
+━━━━━━━━━━━━━━━
+
+🤔 आपकी क्या राय है?
+
+📢 ऐसी ही खबरों के लिए follow करें।
+
+🔗 Source:
+{link if 'link' in locals() else ''}
+
+#BreakingNews #ViralNews
 Emotion Score: 5/10
 Virality Score: 5/10
 Political Toxicity: 0/10
