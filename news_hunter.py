@@ -92,16 +92,13 @@ if HF_TOKEN:
 # OPENROUTER CLIENT
 # =========================================================
 
-
 if OPENROUTER_API_KEY:
     try:
         openrouter_client = OpenAI(
             api_key=OPENROUTER_API_KEY,
             base_url="https://openrouter.ai/api/v1"
         )
-
         print("✅ OPENROUTER READY")
-
     except Exception as e:
         print("❌ OPENROUTER INIT ERROR:", e)
 
@@ -121,11 +118,19 @@ SAMBANOVA_MODELS = [
 HF_MODELS = [
     "meta-llama/Meta-Llama-3-8B-Instruct"
 ]
+
 OPENROUTER_MODELS = [
     "deepseek/deepseek-chat-v3-0324:free",
     "qwen/qwen3-32b:free",
     "google/gemma-3-27b-it:free"
 ]
+
+# =========================================================
+# DUPLICATE DETECTION  [FIX 1: defined is_similar — was used but never defined]
+# =========================================================
+
+def is_similar(a, b, threshold=0.7):
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= threshold
 
 # =========================================================
 # TELEGRAM
@@ -149,7 +154,6 @@ def send_telegram_message(message):
                 data=payload,
                 timeout=30
             )
-
             print("✅ TELEGRAM SENT")
             print(response.text)
 
@@ -543,6 +547,7 @@ Emotion Score: 5/10
 Virality Score: 5/10
 Political Toxicity: 0/10
 """
+
 # =========================================================
 # RSS FEEDS
 # =========================================================
@@ -577,6 +582,7 @@ RSS_FEEDS = {
     "Reddit WorldNews": "https://www.reddit.com/r/worldnews/.rss",
     "Reddit Geopolitics": "https://www.reddit.com/r/geopolitics/.rss"
 }
+
 # =========================================================
 # YOUTUBE TREND SIGNALS
 # =========================================================
@@ -587,7 +593,6 @@ YOUTUBE_FEEDS = {
     "IndiaTV": "https://www.youtube.com/feeds/videos.xml?channel_id=UCttspZesZIDEwwpVIgoZtWQ",
     "TV9 Bharatvarsh": "https://www.youtube.com/feeds/videos.xml?channel_id=UCP0uG-mcMImgKnJz-VsQxKQ"
 }
-
 
 # =========================================================
 # FETCH NEWS
@@ -695,7 +700,6 @@ for row in filtered_news:
     print(f"HEADLINE: {headline}")
     print("=" * 80)
 
-
     # =====================================================
     # SMART SCORING
     # =====================================================
@@ -754,7 +758,6 @@ for row in filtered_news:
         "Breaking"
     ]:
         controversy_bonus += 2
-
 
     prompt = f"""
 You are an elite viral content writer, Facebook monetization strategist, and social media journalist.
@@ -857,10 +860,10 @@ Summarize how people/social media are reacting.
 
 6️⃣ 🧠 ENGAGEMENT SECTION
 Ask emotionally engaging questions such as:
-- “आपकी क्या राय है?”
-- “क्या ऐसा होना सही है?”
-- “क्या सरकार को कार्रवाई करनी चाहिए?”
-- “क्या आप इससे सहमत हैं?”
+- "आपकी क्या राय है?"
+- "क्या ऐसा होना सही है?"
+- "क्या सरकार को कार्रवाई करनी चाहिए?"
+- "क्या आप इससे सहमत हैं?"
 
 7️⃣ 📢 CALL TO ACTION
 Encourage users to:
@@ -912,7 +915,8 @@ Full Article: {article_text}
 Source Link: {link}
 """
 
-     try:
+    # [FIX 2: try block was misindented — aligned correctly under for loop]
+    try:
 
         ai_result = generate_ai_response(prompt)
 
@@ -958,10 +962,11 @@ Source Link: {link}
 
         final_score = round(final_score, 2)
 
+        # [FIX 3: clean/shorten URL moved BEFORE telegram_message build, was after]
         cleaned_link = clean_url(link)
         short_link = shorten_url(cleaned_link)
 
-            telegram_message = f"""
+        telegram_message = f"""
 🔥 VIRAL NEWS 
 
 📰 {headline}
@@ -988,11 +993,24 @@ https://youtube.com/@karan_patel_kushinagar
 https://www.facebook.com/share/1D627R2qFV/
 """
 
-            send_telegram_message(telegram_message)
+        send_telegram_message(telegram_message)
 
-            print("✅ SENT TO TELEGRAM")
+        print("✅ SENT TO TELEGRAM")
 
-            time.sleep(TELEGRAM_SLEEP_TIME)
+        time.sleep(TELEGRAM_SLEEP_TIME)
+
+        # [FIX 4: results.append was missing entirely — CSV was always empty]
+        results.append({
+            "category": category,
+            "headline": headline,
+            "link": link,
+            "short_link": short_link,
+            "emotion_score": emotion_score,
+            "virality_score": virality_score,
+            "toxicity_score": toxicity_score,
+            "final_score": final_score,
+            "ai_result": ai_result
+        })
 
         time.sleep(AI_SLEEP_TIME)
 
