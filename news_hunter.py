@@ -824,75 +824,78 @@ Source Link: {link}
 """
 
     # [FIX 2: try block was misindented — aligned correctly under for loop]
-   try:
+try:
 
-        ai_result = generate_ai_response(prompt)
-    
-        emotion_match = re.search(
-            r"Emotion Score:\s*(\d+)/10",
-            ai_result
-        )
-    
-        virality_match = re.search(
-            r"Virality Score:\s*(\d+)/10",
-            ai_result
-        )
-    
-        toxicity_match = re.search(
-            r"Political Toxicity:\s*(\d+)/10",
-            ai_result
-        )
-    
-        emotion_score = int(
-            emotion_match.group(1)
-        ) if emotion_match else 5
-    
-        virality_score = int(
-            virality_match.group(1)
-        ) if virality_match else 5
-    
-        toxicity_score = int(
-            toxicity_match.group(1)
-        ) if toxicity_match else 0
-    
-        # =====================================================
-        # FINAL SCORE
-        # =====================================================
-    
-        final_score = (
-            virality_score * 0.35 +
-            emotion_score * 0.25 +
-            india_score * 0.20 +
-            geo_score * 0.10 +
-            emotion_bonus * 0.05 +
-            controversy_bonus * 0.05 -
-            toxicity_score * 0.05
-        )
-    
-        if is_local:
-            final_score += LOCAL_NEWS_BONUS
-    
-        final_score = round(final_score, 2)
-    
-        # =====================================================
-        # SCORE GATE
-        # DO NOT SEND LOW VIRAL NEWS
-        # =====================================================
-    
-        if final_score < 5:
-            print(f"⏭️ SKIPPED LOW SCORE NEWS: {final_score}")
-            continue
-    
-        # =====================================================
-        # CLEAN URL
-        # =====================================================
-    
-        cleaned_link = clean_url(link)
-        short_link = shorten_url(cleaned_link)
+    ai_result = generate_ai_response(prompt)
 
+    emotion_match = re.search(
+        r"Emotion Score:\s*(\d+)/10",
+        ai_result
+    )
 
-        telegram_message = f"""
-🔥 VIRAL NEWS 
+    virality_match = re.search(
+        r"Virality Score:\s*(\d+)/10",
+        ai_result
+    )
+
+    toxicity_match = re.search(
+        r"Political Toxicity:\s*(\d+)/10",
+        ai_result
+    )
+
+    emotion_score = int(
+        emotion_match.group(1)
+    ) if emotion_match else 5
+
+    virality_score = int(
+        virality_match.group(1)
+    ) if virality_match else 5
+
+    toxicity_score = int(
+        toxicity_match.group(1)
+    ) if toxicity_match else 0
+
+    # =====================================================
+    # FINAL SCORE
+    # =====================================================
+
+    final_score = (
+        virality_score * 0.35 +
+        emotion_score * 0.25 +
+        india_score * 0.20 +
+        geo_score * 0.10 +
+        emotion_bonus * 0.05 +
+        controversy_bonus * 0.05 -
+        toxicity_score * 0.05
+    )
+
+    if is_local:
+        final_score += LOCAL_NEWS_BONUS
+
+    final_score = round(final_score, 2)
+
+    # =====================================================
+    # SCORE GATE
+    # DO NOT SEND LOW VIRAL NEWS
+    # =====================================================
+
+    if final_score < 5:
+        print(f"⏭️ SKIPPED LOW SCORE NEWS: {final_score}")
+        continue
+
+    # =====================================================
+    # CLEAN URL
+    # =====================================================
+
+    cleaned_link = clean_url(link)
+    short_link = shorten_url(cleaned_link)
+
+    # =====================================================
+    # TELEGRAM MESSAGE
+    # =====================================================
+
+    telegram_message = f"""
+🔥 VIRAL NEWS
 
 📰 {headline}
 
@@ -902,45 +905,57 @@ Source Link: {link}
 ❤️ Emotion: {emotion_score}/10
 🚀 Virality: {virality_score}/10
 ⚠️ Toxicity: {toxicity_score}/10
+
 ====================
 
 {ai_result}
 
 ====================
+
 🔗 News Source Link:
 {short_link}
-follow us on :
+
+Follow us on:
+
 📸 Instagram:
 https://www.instagram.com/karan_patel_kushinagar
+
 ▶️ YouTube:
 https://youtube.com/@karan_patel_kushinagar
+
 📘 Facebook:
 https://www.facebook.com/share/1D627R2qFV/
 """
 
-        send_telegram_message(telegram_message)
+    # =====================================================
+    # SEND TELEGRAM
+    # =====================================================
 
-        print("✅ SENT TO TELEGRAM")
+    send_telegram_message(telegram_message)
 
-        time.sleep(TELEGRAM_SLEEP_TIME)
+    print("✅ SENT TO TELEGRAM")
 
-        # [FIX 4: results.append was missing entirely — CSV was always empty]
-        results.append({
-            "category": category,
-            "headline": headline,
-            "link": link,
-            "short_link": short_link,
-            "emotion_score": emotion_score,
-            "virality_score": virality_score,
-            "toxicity_score": toxicity_score,
-            "final_score": final_score,
-            "ai_result": ai_result
-        })
+    # =====================================================
+    # SAVE RESULTS
+    # =====================================================
 
-        time.sleep(AI_SLEEP_TIME)
+    results.append({
+        "category": category,
+        "headline": headline,
+        "link": link,
+        "short_link": short_link,
+        "emotion_score": emotion_score,
+        "virality_score": virality_score,
+        "toxicity_score": toxicity_score,
+        "final_score": final_score,
+        "ai_result": ai_result
+    })
 
-    except Exception as e:
-        print("❌ AI ANALYSIS ERROR:", e)
+    time.sleep(TELEGRAM_SLEEP_TIME)
+    time.sleep(AI_SLEEP_TIME)
+
+except Exception as e:
+    print("❌ AI ANALYSIS ERROR:", e)
 
 # =========================================================
 # SAVE CSV
