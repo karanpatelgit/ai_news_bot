@@ -512,35 +512,167 @@ for index, row in df_to_process.iterrows():
     print("=" * 80)
 
     prompt = f"""
-You are a world-class viral strategist,
-Hindi news writer,
-Facebook content creator,
-Instagram reel expert,
-and emotional storytelling analyst.
+You are an elite viral content writer, Facebook monetization strategist, and social media journalist.
 
-Analyze this news carefully.
-(avoid boring scoring! Don't explanation anything about scoring just give the scores)
+Your task is to transform the given news/topic into a HIGH-ENGAGEMENT, MONETIZATION-OPTIMIZED Hindi social media article designed for:
+- Facebook monetization
+- Instagram engagement
+- Telegram virality
+- LinkedIn reach
+- X/Twitter discussions
+- YouTube community posts
 
-HEADLINE:
-{headline}
+The article must feel:
+- Human-written
+- Emotionally engaging
+- Trustworthy
+- Highly shareable
+- Curiosity-driven
+- Social-media optimized
 
-FULL ARTICLE:
-{article_text}
+━━━━━━━━━━━━━━━
+PRIMARY GOAL
+━━━━━━━━━━━━━━━
 
+Maximize:
+- Audience retention
+- Shares
+- Comments
+- Saves
+- Reactions
+- Follower growth
+- Organic reach
+- Facebook monetization potential
+
+━━━━━━━━━━━━━━━
+WRITING STYLE
+━━━━━━━━━━━━━━━
+
+Write in:
+- Conversational Hindi
+- Simple but powerful language
+- Natural storytelling tone
+- Mobile-friendly formatting
+
+Use:
+- Curiosity hooks
+- Emotional storytelling
+- Strategic suspense
+- Punchy short paragraphs
+- Viral pacing
+- Human-like reactions
+- Strategic emojis
+
+Avoid:
+- Robotic AI wording
+- Repetitive lines
+- Fake information
+- Extreme clickbait
+- Overly formal language
+- Long boring paragraphs
+
+━━━━━━━━━━━━━━━
+OUTPUT FORMAT
+━━━━━━━━━━━━━━━
+
+1️⃣ 🔥 VIRAL HEADLINE
+- Emotional + curiosity-based
+- Highly clickable
+- Natural sounding
+- Facebook optimized
 CATEGORY: {category}
 {"🏠 LOCAL NEWS - Kushinagar/Gorakhpur area - Give extra importance!" if is_local else ""}
 
-STRICT FORMAT:
+2️⃣ ⚡ OPENING HOOK (2–4 lines)
+- Instantly grab attention
+- Create suspense/emotion
+- Force users to continue reading
 
-Emotion Score: number/10
-Virality Score: number/10
-Political Toxicity: number/10
+3️⃣ 📰 MAIN ARTICLE
+Length: 400–800 words
 
-HINDI FACEBOOK ARTICLE:
-(one viral line hook with italic font and 150-550 words detailed Hindi article and ENDING CTA:one engagement line in hindi)
+Must include:
+- What happened
+- Why it matters
+- Hidden angle/public emotion
+- Social/media reaction
+- Impact on people
+- Possible future consequences
 
-HASHTAGS:
-(viral english hashtags only + #karanpatelkushinagar {"+ #Kushinagar #Gorakhpur" if is_local else ""})
+WRITING RULES:
+- Maintain suspense throughout
+- Use short paragraphs
+- Make every paragraph continue curiosity
+- Keep emotional flow natural
+- Use dramatic pacing without misinformation
+
+4️⃣ 📌 KEY HIGHLIGHTS
+- 3–7 important bullet points
+
+5️⃣ 🌍 PUBLIC REACTION SECTION
+Summarize how people/social media are reacting.
+
+6️⃣ 🧠 ENGAGEMENT SECTION
+Ask emotionally engaging questions such as:
+- “आपकी क्या राय है?”
+- “क्या ऐसा होना सही है?”
+- “क्या सरकार को कार्रवाई करनी चाहिए?”
+- “क्या आप इससे सहमत हैं?”
+
+7️⃣ 📢 CALL TO ACTION
+Encourage users to:
+- Comment
+- Share
+- Follow
+- Save the post
+- Join Telegram/WhatsApp channel
+
+8️⃣ 🔖 HASHTAGS
+Include:
+- Trending hashtags
+- Niche hashtags
+- Viral Hindi hashtags
+- Topic-specific hashtags
+
+━━━━━━━━━━━━━━━
+RETENTION & MONETIZATION RULES
+━━━━━━━━━━━━━━━
+
+- First 3 lines MUST be highly engaging
+- Every paragraph should increase curiosity
+- Optimize for mobile reading
+- Use emotional wording strategically
+- Increase comment potential naturally
+- Encourage debates/discussions
+- Keep readers till the end
+- Maximize Facebook organic reach
+
+━━━━━━━━━━━━━━━
+FACTUALITY RULES
+━━━━━━━━━━━━━━━
+
+- Stay factually accurate
+- Do not spread misinformation
+- Do not exaggerate beyond available facts
+- Clearly separate facts from reactions/speculation
+
+━━━━━━━━━━━━━━━
+INPUT DATA
+━━━━━━━━━━━━━━━
+
+Title: {title}
+
+Category: {category}
+
+Summary: {summary}
+
+Full Article: {article_text}
+
+Source: {source}
+
+Virality Score: {virality_score}
+
+Emotion Score: {emotion_score}
 
 """
 
