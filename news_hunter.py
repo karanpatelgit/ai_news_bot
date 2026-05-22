@@ -160,13 +160,11 @@ def is_similar(a, b, threshold=0.7):
 # =========================================================
 # TELEGRAM
 # =========================================================
-
 def _parse_chat_ids(raw: str):
     if not raw:
         return []
     parts = [p.strip() for p in raw.split(",")]
     return [p for p in parts if p]
-
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -174,11 +172,11 @@ def send_telegram_message(message):
     chunk_size = 4000
     chunks = [message[i:i+chunk_size] for i in range(0, len(message), chunk_size)]
 
-    # Prefer TELEGAM_CHAT_IDS; fallback to old TELEGAM_CHAT_ID
+   # Prefer TELEGAM_CHAT_IDS; fallback to old TELEGAM_CHAT_ID
     chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
     if not chat_ids and CHAT_ID:
         chat_ids = [CHAT_ID]
-
+        
     if not chat_ids:
         print("❌ TELEGRAM ERROR: No CHAT_ID(s) configured (set TELEGRAM_CHAT_IDS or TELEGRAM_CHAT_ID)")
         return
@@ -199,7 +197,7 @@ def send_telegram_message(message):
                 print(f"✅ TELEGRAM SENT -> chat_id={target_chat_id}")
                 # print(response.text)
 
-            except Exception as e:
+          except Exception as e:
                 print(f"❌ TELEGRAM ERROR -> chat_id={target_chat_id}:", e)
 
 # =========================================================
