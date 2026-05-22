@@ -426,55 +426,55 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
 
     print("\n⚠️ USING SMART FALLBACK FORMATTER (RUNNING DEEP ENGINE)")
 
-    try:
-        # Step 1: Structural backup verification
-        if not headline or headline.strip() == "":
-            title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
-            headline = title_match.group(1).strip() if title_match else "Breaking News"
-
-        if not category or category.strip() == "":
-            category_match = re.search(r"category:\s*(.+)", prompt, re.IGNORECASE)
-            category = category_match.group(1).strip() if category_match else "News"
-
-        if not article_text or len(article_text.strip()) < 50:
-            article_match = re.search(r"(?:full article|article):\s*(.+?)(?:source link|link):", prompt, re.DOTALL | re.IGNORECASE)
-            article_text = article_match.group(1).strip() if article_match else headline
-
-        if not link or link.strip() == "":
-            link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
-            link = link_match.group(1).strip() if link_match else ""
-
-        # Step 2: Advanced text extraction (Scratches deep line structures instead of just words)
-        clean_text = re.sub(r'\s+', ' ', article_text).strip()
+            try:
+                # Step 1: Structural backup verification
+                if not headline or headline.strip() == "":
+                    title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
+                    headline = title_match.group(1).strip() if title_match else "Breaking News"
         
-        # Split across standard sentence and phrase boundary rules
-        sentences = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
-        important_lines = []
-
-        for sentence in sentences:
-            sentence = sentence.strip()
-            
-            # Filter tracking codes, share handles and noisy media labels
-            if any(x in sentence.lower() for x in ["click here", "subscribe", "follow us", "read more", "advertisement", "copyright"]):
-                continue
+                if not category or category.strip() == "":
+                    category_match = re.search(r"category:\s*(.+)", prompt, re.IGNORECASE)
+                    category = category_match.group(1).strip() if category_match else "News"
+        
+                if not article_text or len(article_text.strip()) < 50:
+                    article_match = re.search(r"(?:full article|article):\s*(.+?)(?:source link|link):", prompt, re.DOTALL | re.IGNORECASE)
+                    article_text = article_match.group(1).strip() if article_match else headline
+        
+                if not link or link.strip() == "":
+                    link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
+                    link = link_match.group(1).strip() if link_match else ""
+        
+                # Step 2: Advanced text extraction (Scratches deep line structures instead of just words)
+                clean_text = re.sub(r'\s+', ' ', article_text).strip()
                 
-            # Accept informative granular lines that are not copy-pasted headlines
-            if len(sentence) > 30 and sentence.lower() not in headline.lower():
-                important_lines.append(sentence)
-                
-            # Requirement Fulfilled: Capture at least 10 high-quality dynamic insight items
-            if len(important_lines) >= 10:
-                break
-
-        # Emergency Fallback: If scraped array contains less than 10 lines, split structural byte chunks
-        if len(important_lines) < 10:
-            if len(clean_text) > len(headline):
-                chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
-                for chunk in chunks:
-                    if len(chunk) > 25 and chunk not in important_lines:
-                        important_lines.append(chunk)
+                # Split across standard sentence and phrase boundary rules
+                sentences = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
+                important_lines = []
+        
+                for sentence in sentences:
+                    sentence = sentence.strip()
+                    
+                    # Filter tracking codes, share handles and noisy media labels
+                    if any(x in sentence.lower() for x in ["click here", "subscribe", "follow us", "read more", "advertisement", "copyright"]):
+                        continue
+                        
+                    # Accept informative granular lines that are not copy-pasted headlines
+                    if len(sentence) > 30 and sentence.lower() not in headline.lower():
+                        important_lines.append(sentence)
+                        
+                    # Requirement Fulfilled: Capture at least 10 high-quality dynamic insight items
                     if len(important_lines) >= 10:
                         break
+        
+                # Emergency Fallback: If scraped array contains less than 10 lines, split structural byte chunks
+                if len(important_lines) < 10:
+                    if len(clean_text) > len(headline):
+                        chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
+                        for chunk in chunks:
+                            if len(chunk) > 25 and chunk not in important_lines:
+                                important_lines.append(chunk)
+                            if len(important_lines) >= 10:
+                                break
             
             # Pad placeholders to ensure the post never collapses structurally
             backup_points = [
