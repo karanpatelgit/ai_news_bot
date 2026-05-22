@@ -956,10 +956,10 @@ Main article (400–600 words): Explain what happened, why it matters, hidden an
 Key highlights: 3–7 important bullet points.
 Public reaction: Summarize social media and public responses.
 Engagement section: Ask emotionally engaging questions like “आपकी क्या राय है?” or “क्या सरकार को कार्रवाई करनी चाहिए?”
-Call to action: Encourage comments, shares, follows, saves, and joining Telegram/WhatsApp channels.
+Call to action: Encourage comments, shares, follows, saves, and joining Intagram/WhatsApp/facebook/X(twitter) with  handels name "karan_patel_kushinagar".
 Hashtags: Use trending, niche, viral Hindi, and topic-specific tags.
+(Note : never mention the section heading like - public reactioon, engagement section etc.)
 Follow retention and monetization rules: Start with a strong hook, keep curiosity rising, optimize for mobile, use emotional language strategically, and maximize Facebook reach and engagement.
-Note : never mention the section heading like - public reactioon, engagement section etc.
 Ensure factual accuracy without exaggeration or misinformation, clearly separating facts from opinions.
 IMPORTANT:
 - Generate COMPLETE output
@@ -1031,7 +1031,7 @@ Source Link: {link}
 
         final_score = round(final_score, 2)
 
-        if final_score < 6.5:
+        if final_score < 8.5:
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
@@ -1067,15 +1067,9 @@ Source Link: {link}
 {short_link}
 
 Follow us on:
-
-📸 Instagram:
-https://www.instagram.com/karan_patel_kushinagar
-
-▶️ YouTube:
-https://youtube.com/@karan_patel_kushinagar
-
-📘 Facebook:
-https://www.facebook.com/share/1D627R2qFV/
+📸 Instagram: https://www.instagram.com/karan_patel_kushinagar  
+▶️ YouTube: https://youtube.com/@karan_patel_kushinagar
+📘 Facebook: https://www.facebook.com/share/1D627R2qFV/
 """
 
         send_telegram_message(telegram_message)
