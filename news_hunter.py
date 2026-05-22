@@ -824,38 +824,42 @@ Source Link: {link}
 """
 
     # [FIX 2: try block was misindented — aligned correctly under for loop]
-    try:
+   try:
 
         ai_result = generate_ai_response(prompt)
-
+    
         emotion_match = re.search(
             r"Emotion Score:\s*(\d+)/10",
             ai_result
         )
-
+    
         virality_match = re.search(
             r"Virality Score:\s*(\d+)/10",
             ai_result
         )
-
+    
         toxicity_match = re.search(
             r"Political Toxicity:\s*(\d+)/10",
             ai_result
         )
-
+    
         emotion_score = int(
             emotion_match.group(1)
         ) if emotion_match else 5
-
+    
         virality_score = int(
             virality_match.group(1)
         ) if virality_match else 5
-
+    
         toxicity_score = int(
             toxicity_match.group(1)
         ) if toxicity_match else 0
-
-                final_score = (
+    
+        # =====================================================
+        # FINAL SCORE
+        # =====================================================
+    
+        final_score = (
             virality_score * 0.35 +
             emotion_score * 0.25 +
             india_score * 0.20 +
@@ -864,15 +868,28 @@ Source Link: {link}
             controversy_bonus * 0.05 -
             toxicity_score * 0.05
         )
-
+    
         if is_local:
             final_score += LOCAL_NEWS_BONUS
-
+    
         final_score = round(final_score, 2)
-
-        # [FIX 3: clean/shorten URL moved BEFORE telegram_message build, was after]
+    
+        # =====================================================
+        # SCORE GATE
+        # DO NOT SEND LOW VIRAL NEWS
+        # =====================================================
+    
+        if final_score < 5:
+            print(f"⏭️ SKIPPED LOW SCORE NEWS: {final_score}")
+            continue
+    
+        # =====================================================
+        # CLEAN URL
+        # =====================================================
+    
         cleaned_link = clean_url(link)
         short_link = shorten_url(cleaned_link)
+
 
         telegram_message = f"""
 🔥 VIRAL NEWS 
