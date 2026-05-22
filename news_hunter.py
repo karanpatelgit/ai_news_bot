@@ -882,7 +882,7 @@ for row in filtered_news:
             india_score += 1.5
 
     # 3. Emotional & Sensational Triggers
-   EMOTIONAL_WORDS = [
+    EMOTIONAL_WORDS = [
     # --- HIGH-VELOCITY ENGLISH SENSATIONALISM ---
     "shock", "fear", "warning", "danger", "viral", "anger", "violence", "protest", "ebola", "virus", 
     "outbreak", "alert", "breaking", "urgent", "hazard", "panic", "expose", "mystery", "miracle", 
