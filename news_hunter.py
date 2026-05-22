@@ -100,6 +100,17 @@ if OPENROUTER_API_KEY:
         print("✅ OPENROUTER READY")
     except Exception as e:
         print("❌ OPENROUTER INIT ERROR:", e)
+else:
+    print("⚠️ OPENROUTER_API_KEY missing from env — OpenRouter will use raw requests fallback")
+
+# Startup diagnostics
+print("=" * 50)
+print("🔑 KEY STATUS:")
+print(f"   GROQ        : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
+print(f"   SAMBANOVA   : {'✅ SET' if SAMBANOVA_API_KEY else '❌ MISSING'}")
+print(f"   HF_TOKEN    : {'✅ SET' if HF_TOKEN else '❌ MISSING'}")
+print(f"   OPENROUTER  : {'✅ SET' if OPENROUTER_API_KEY else '❌ MISSING'}")
+print("=" * 50)
 
 # =========================================================
 # MODELS (FIXED FREE OPENROUTER MODEL IDENTIFIERS)
@@ -386,35 +397,53 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 print("❌ HF FAILED:", e)
 
     # =====================================================
-    # OPENROUTER
+    # OPENROUTER — raw requests (bypasses openrouter_client
+    # None guard; works even if .env key name mismatches)
     # =====================================================
 
-    if openrouter_client:
+    _or_key = OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", "")
+
+    if not _or_key:
+        print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter")
+    else:
         for model_name in OPENROUTER_MODELS:
 
             try:
                 print(f"🔥 USING OPENROUTER: {model_name}")
 
-                response = openrouter_client.chat.completions.create(
-                    model=model_name,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0.8,
-                    max_tokens=2048,
-                    extra_headers={
+                or_resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {_or_key}",
+                        "Content-Type": "application/json",
                         "HTTP-Referer": "https://github.com/",
                         "X-Title": "News Hunter Bot Matrix"
-                    }
+                    },
+                    json={
+                        "model": model_name,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        "temperature": 0.8,
+                        "max_tokens": 2048
+                    },
+                    timeout=60
                 )
 
-                content = response.choices[0].message.content
-
-                if content:
-                    return content
+                if or_resp.status_code == 200:
+                    or_data = or_resp.json()
+                    or_content = or_data["choices"][0]["message"]["content"]
+                    if or_content and or_content.strip():
+                        print(f"✅ OPENROUTER SUCCESS: {model_name}")
+                        return or_content
+                    else:
+                        print(f"⚠️ OPENROUTER empty response: {model_name}")
+                else:
+                    print(f"❌ OPENROUTER HTTP {or_resp.status_code}: {model_name}")
+                    print(or_resp.text[:300])
 
             except Exception as e:
                 print(f"❌ OPENROUTER FAILED: {model_name}")
@@ -940,7 +969,7 @@ for row in filtered_news:
 
     print(f"📊 PRE SCORE (Dynamic Gate Analysis): {raw_score}")
 
-    if raw_score < 9.0:
+    if raw_score < 6.0:
         print(f"⏭️ SKIPPED LOW PRE-SCORE: {headline} ({raw_score})")
         continue
 
@@ -1036,7 +1065,7 @@ Source Link: {link}
 
         final_score = round(final_score, 2)
 
-        if final_score < 8.5:
+        if final_score < 6.5:
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
