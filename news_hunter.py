@@ -261,18 +261,18 @@ def process_single_entry(entry, category):
         if not published:
             return None
         
-        # Article publish date
-        published_date = datetime(
-            *published[:6]
-        ).date()
+        # Published datetime from feed
+        published_datetime = datetime(
+            *published[:6],
+            tzinfo=timezone.utc
+        )
         
-        # Today's date (UTC) and now
-        today = datetime.utcnow().date()
+        # Current UTC time
         now = datetime.now(timezone.utc)
-         
-        # ONLY TODAY Only 8 hrs before
+        
+        # Check if article was published within last 8 hours
         if now - published_datetime <= timedelta(hours=8):
-            
+        
             real_link = extract_real_url(entry.link)
             article_text = fetch_full_article(real_link)
             
