@@ -764,10 +764,10 @@ for row in filtered_news:
     # =====================================================
 
     raw_score = (
-        india_score * 0.20 +
-        geo_score * 0.15 +
-        emotion_bonus * 0.10 +
-        controversy_bonus * 0.10
+        india_score * 2.0 +
+        geo_score * 1.5 +
+        emotion_bonus * 1.0 +
+        controversy_bonus * 1.0
     )
 
     if is_local:
