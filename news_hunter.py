@@ -781,7 +781,7 @@ for row in filtered_news:
     raw_score = round(raw_score, 2)
     print(f"📊 PRE SCORE (Dynamic Gate Analysis): {raw_score}")
 
-    if raw_score < 6.0:
+    if raw_score < 8.0:
         print(f"⏭️ SKIPPED LOW PRE-SCORE: {headline} ({raw_score})")
         continue
 
@@ -792,12 +792,10 @@ You are an elite viral news content writer, Facebook monetization strategist, an
 Create a high-engagement, monetization-focused Hindi social media article optimized for social networks.
 
 Structure the output as follows:
-Viral headline: Emotional, curiosity-based.
-Opening hook (2–4 lines): Grabs attention.
-Main article (400–600 words): Short paragraphs explaining the event details.
-Key highlights: 3–7 important bullet points.
-Public reaction: Summary of internet viewpoints.
-Engagement section: Open-ended questions.
+Viral headline: Emotional, curiosity-based,Opening hook (2–3 lines) with Grabs attention.
+Main article (300–400 words): Short paragraphs explaining the event details.
+Key highlights: 3–5 important bullet points other than main article .
+Public reaction(2-4): Summary of internet viewpoints(2-3 sentence) and Open-ended questions(2-3 question).
 Call to action: Direct users to social handles named "karan_patel_kushinagar".
 
 Take your input data as :
