@@ -1334,22 +1334,78 @@ for row in filtered_news:
 
     print("✅ PRE-SCORE PASSED — RUNNING AI ENGINE")
 
-    prompt = f"""
-You are an elite viral news content writer, Facebook monetization strategist, and social media journalist in Hindi Language.
-Create a high-engagement, monetization-focused Hindi social media article optimized for social networks. Sentence repetition is strictly prohibited.
+    # Detect language mode based on category
+_local_cats = {
+    'Kushinagar','Gorakhpur','Maharajganj','Deoria','Basti',
+    'GNews_Kushinagar_HI','GNews_Gorakhpur_HI','GNews_Purvanchal_HI'
+}
+_is_local_lang = is_local or category in _local_cats
+_lang_instruction = (
+    "भाषा: शुद्ध हिंदी — आसान, बोलचाल की हिंदी जो गाँव और कस्बे का आम इंसान भी समझ सके।"
+    if _is_local_lang else
+    "Language: Hinglish — Hindi main likho lekin impactful English words naturally mix karo (jaise: viral, breaking, update, reaction, shocking). Avoid full English sentences."
+)
 
-Structure the output as follows:
-Viral headline: Emotional, curiosity-based, Opening hook (2–3 lines) with Grabs attention.
-Main article (300–400 words): Short paragraphs explaining the event details.
-Key highlights: 3–5 important bullet points in other words than main article.
-Public reaction(2-4): Summary of internet viewpoints(2-3 sentence) and Open-ended questions(2-3 question).
-Call to action: Direct users to social handles named "karan_patel_kushinagar".
+prompt = f"""
+Tu ek expert social media news writer hai jo Facebook aur Instagram ke liye viral, monetization-friendly content likhta hai.
+Tera channel hai "@karan_patel_kushinagar" — local Purvanchal ki awaaz, sach aur speed ke saath.
 
-Take your input data as:
-Title: {headline}
+{_lang_instruction}
+
+STRICT OUTPUT FORMAT — bilkul is structure mein likho, koi extra heading mat add karo:
+
+1. 🔥 VIRAL HEADLINE (1 line)
+   - Emotional + curiosity gap wali — reader ko rukne par majboor kare
+   - Number ya shocking word se shuru karo jab possible ho
+   - Max 12 words
+
+2. 🪝 OPENING HOOK (2-3 lines)
+   - Pehli line mein sabse badi baat — reader scroll nahi karega
+   - Ek aisa angle jo dusre news pages ne nahi pakda
+   - Directly baat pe aao, "aaj hum baat karenge" BILKUL MAT LIKHO
+
+3. 📰 MAIN STORY (250-300 words)
+   - Short paragraphs — max 3 lines each, Facebook mobile readers ke liye
+   - Har paragraph mein ek nayi information
+   - Facts, figures, naam, jagah — jo bhi available ho use karo
+   - Dramatic but factual — koi exaggeration nahi
+   - Story aise build karo ki reader end tak padhe
+
+4. ⚡ KEY FACTS (exactly 4 bullet points)
+   - Har point alag information ho — main story repeat nahi
+   - Bold-worthy facts jo log screenshot karke share karein
+   - Format: • [fact]
+
+5. 💬 PUBLIC REACTION ANGLE (2-3 lines)
+   - Log is khabar par kya soch rahe hain / kya react kar rahe hain
+   - 1 open-ended question jo comments drive kare
+   - Example style: "Social media par log pooch rahe hain ki..."
+
+6. 📣 CALL TO ACTION (2 lines max)
+   - Line 1: Engagement drive karo — share/tag/comment
+   - Line 2: Follow karo @karan_patel_kushinagar — Facebook aur Instagram par
+
+7. #️⃣ HASHTAGS (1 line, 5-8 tags)
+   - Mix: 3 broad (#BreakingNews #Viral) + 3 topic-specific + 2 local (#Kushinagar #Purvanchal)
+   - No spaces inside hashtags
+
+---
+INPUT DATA:
+शीर्षक / Title: {headline}
 Category: {category}
-Full Article: {article_text}
-Source Link: {link}
+Full Article: {article_text[:3000]}
+Source: {link}
+---
+
+QUALITY RULES — इन्हें तोड़ा तो content reject होगा:
+✗ "आज हम बात करेंगे" — NEVER
+✗ Sentence repetition — NEVER  
+✗ Vague filler lines — NEVER
+✗ More than 3 lines in any paragraph — NEVER
+✗ Hashtags inside the article body — NEVER
+✓ Every line must add new value
+✓ Reader must feel: "yaar yeh toh share karna padega"
+✓ End with a question that makes people comment
 """
 
     try:
