@@ -70,7 +70,9 @@ SIZE:
             headless=False
         )
 
-        context = browser.new_context()
+        context = browser.new_context(
+            accept_downloads=True
+        )
 
         page = context.new_page()
 
@@ -181,21 +183,41 @@ SIZE:
             download_button = page.locator(
                 "text=Download"
             ).last
+# =====================================================
+# DOWNLOAD IMAGE
+# =====================================================
 
-            download_button.click()
+try:
 
-            print("✅ Download started")
+    print("📥 Downloading poster...")
 
-        except Exception as e:
+    with page.expect_download() as download_info:
 
-            print("❌ Download failed:", e)
+        page.keyboard.press("Control+Shift+E")
 
-        time.sleep(15)
+        time.sleep(5)
 
-        browser.close()
+        download_button = page.locator(
+            "text=Download"
+        ).last
 
-        print("🔥 NEWS POSTER COMPLETED")
+        download_button.click()
 
+    download = download_info.value
+
+    save_path = "downloads/news_poster.png"
+
+    download.save_as(save_path)
+
+    print(f"✅ IMAGE SAVED: {save_path}")
+
+    return save_path
+
+except Exception as e:
+
+    print("❌ Download failed:", e)
+
+    return None
 
 # =========================================================
 # EXAMPLE USAGE
