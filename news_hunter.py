@@ -260,7 +260,7 @@ def process_single_entry(entry, category, time_window_h=8):
         published = entry.get("published_parsed")
         if not published:
             return None
-        published_datetime = datetime(*published[:6], tzinfo=timezone.utc)
+        published_datetime = datetime(*published[:4], tzinfo=timezone.utc)
         now       = datetime.now(timezone.utc)
         time_diff = now - published_datetime
 
