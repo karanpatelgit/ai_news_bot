@@ -1,6 +1,5 @@
 import feedparser
 import pandas as pd
-from canva_ai import generate_news_poster
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from openai import OpenAI
@@ -11,6 +10,8 @@ import os
 import time
 import re
 import requests
+import json
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from difflib import SequenceMatcher
@@ -37,6 +38,9 @@ BOT_TOKEN          = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID            = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 TELEGRAM_CHAT_IDS  = os.environ.get("TELEGRAM_CHAT_IDS", "").strip()
 
+CANVA_EMAIL        = os.environ.get("CANVA_EMAIL", "").strip()
+CANVA_PASSWORD     = os.environ.get("CANVA_PASSWORD", "").strip()
+
 print("=" * 50)
 print("🔑 KEY STATUS:")
 print(f"   GROQ       : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
@@ -46,6 +50,7 @@ print(f"   OPENROUTER : {'✅ SET — ' + OPENROUTER_API_KEY[:8] + '...' if OPEN
 print(f"   BOT_TOKEN  : {'✅ SET' if BOT_TOKEN else '❌ MISSING'}")
 print(f"   CHAT_ID    : {'✅ SET' if CHAT_ID else '❌ MISSING'}")
 print(f"   TELEG_CHAT : {'✅ SET' if TELEGRAM_CHAT_IDS else '❌ MISSING'}")
+print(f"   CANVA      : {'✅ SET' if CANVA_EMAIL and CANVA_PASSWORD else '❌ MISSING'}")
 print("=" * 50)
 
 # =========================================================
@@ -56,11 +61,10 @@ MAX_WORKERS           = 6
 AI_SLEEP_TIME         = 1
 TELEGRAM_SLEEP_TIME   = 1
 LOCAL_NEWS_BONUS      = 2.5
-SCRAPER_TIME_WINDOW_H = 10      # hours back to accept scraped articles
-SCRAPER_MAX_PER_SITE  = 8       # max headlines to extract per LOCAL_SCRAPER site
-RSS_MAX_PER_FEED      = 20      # max entries per RSS feed
+SCRAPER_TIME_WINDOW_H = 10
+SCRAPER_MAX_PER_SITE  = 8
+RSS_MAX_PER_FEED      = 20
 
-# Rotate user agents to reduce bot-detection blocks
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -219,6 +223,216 @@ def send_telegram_photo(photo_path, caption):
             print(f"❌ TELEGRAM PHOTO ERROR ({chat_id}):", e)
 
 # =========================================================
+# SEND ARTICLE WITH INLINE ✅ GENERATE IMAGE BUTTON  ← NEW
+# =========================================================
+
+def send_article_with_button(chat_id, article_index, message_text):
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+    keyboard = {
+        "inline_keyboard": [[
+            {
+                "text": "🖼️ Generate Canva Image",
+                "callback_data": f"canva_{article_index}"
+            }
+        ]]
+    }
+
+    # Split long messages — Telegram max is 4096 chars
+    chunk_size = 3800
+    chunks     = [message_text[i:i+chunk_size] for i in range(0, len(message_text), chunk_size)]
+
+    for i, chunk in enumerate(chunks):
+        payload = {
+            "chat_id": chat_id,
+            "text": chunk,
+        }
+        # Only attach button to the LAST chunk so it appears at the bottom
+        if i == len(chunks) - 1:
+            payload["reply_markup"] = json.dumps(keyboard)
+
+        try:
+            requests.post(url, data=payload, timeout=30)
+            print(f"✅ ARTICLE #{article_index} CHUNK {i+1} SENT WITH BUTTON -> {chat_id}")
+        except Exception as e:
+            print(f"❌ SEND WITH BUTTON ERROR: {e}")
+
+# =========================================================
+# ANSWER CALLBACK QUERY (removes Telegram spinner)  ← NEW
+# =========================================================
+
+def answer_callback(callback_query_id, text=""):
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",
+            data={"callback_query_id": callback_query_id, "text": text},
+            timeout=10
+        )
+    except Exception as e:
+        print("❌ ANSWER CALLBACK ERROR:", e)
+
+# =========================================================
+# IN-MEMORY ARTICLE STORE  ← NEW
+# Holds finished articles so button clicks can retrieve them
+# { article_index: { headline, category, link, ai_result, ... } }
+# =========================================================
+
+article_store = {}
+
+# =========================================================
+# CANVA IMAGE GENERATOR (called on button click only)  ← NEW
+# =========================================================
+
+def generate_and_send_canva_image(article_index):
+
+    from canva_ai import generate_news_poster
+
+    article = article_store.get(article_index)
+
+    if not article:
+        send_telegram_message(f"❌ Article #{article_index} not found in memory.")
+        return
+
+    headline  = article["headline"]
+    category  = article["category"]
+    link      = article["link"]
+    ai_result = article["ai_result"]
+    score     = article["final_score"]
+
+    # Tell user we're starting
+    send_telegram_message(
+        f"⏳ Generating Canva image for article #{article_index}...\n\n"
+        f"📰 {headline}\n\n"
+        f"This may take ~2 minutes. Please wait! 🙏"
+    )
+
+    visual_prompt = f"""
+Breaking Indian news poster.
+
+Headline:
+{headline}
+
+Category:
+{category}
+
+News Summary:
+{ai_result[:500]}
+
+Style:
+Ultra realistic
+Hindi breaking news
+Indian newsroom
+Cinematic lighting
+Viral Instagram post
+Red and black theme
+1080x1350 portrait
+"""
+
+    try:
+
+        print(f"🎨 GENERATING CANVA POSTER FOR ARTICLE #{article_index}...")
+
+        image_path = generate_news_poster(visual_prompt)
+
+        if image_path and os.path.exists(image_path):
+
+            caption = (
+                f"🖼️ Canva AI Poster — Article #{article_index}\n\n"
+                f"📰 {headline}\n"
+                f"📂 {category}\n"
+                f"📈 Viral Score: {score}\n"
+                f"🔗 {link}\n\n"
+                f"Follow us on:\n"
+                f"📸 Instagram: https://www.instagram.com/karan_patel_kushinagar\n"
+                f"▶️ YouTube: https://youtube.com/@karan_patel_kushinagar\n"
+                f"📘 Facebook: https://www.facebook.com/share/1D627R2qFV/"
+            )
+
+            send_telegram_photo(image_path, caption)
+
+            print(f"✅ CANVA IMAGE SENT FOR ARTICLE #{article_index}")
+
+        else:
+
+            send_telegram_message(
+                f"❌ Image generation failed for article #{article_index}. Please try again."
+            )
+
+    except Exception as e:
+
+        print(f"❌ CANVA ERROR for article #{article_index}: {e}")
+
+        send_telegram_message(
+            f"❌ Canva error for article #{article_index}: {str(e)[:200]}"
+        )
+
+# =========================================================
+# TELEGRAM BUTTON CLICK LISTENER  ← NEW
+# Polls Telegram for button taps and triggers Canva
+# =========================================================
+
+def listen_for_button_clicks(stop_event, timeout_minutes=30):
+
+    print(f"\n========== LISTENING FOR BUTTON CLICKS ({timeout_minutes} min) ==========")
+    print("Tap 🖼️ Generate Canva Image on any article in Telegram.")
+    print("Listening will auto-stop after timeout.\n")
+
+    last_update_id = None
+    deadline       = time.time() + (timeout_minutes * 60)
+
+    while not stop_event.is_set() and time.time() < deadline:
+
+        try:
+
+            url    = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+            params = {
+                "timeout": 10,
+                "allowed_updates": ["callback_query"]
+            }
+
+            if last_update_id:
+                params["offset"] = last_update_id + 1
+
+            r       = requests.get(url, params=params, timeout=20)
+            updates = r.json().get("result", [])
+
+            for update in updates:
+
+                last_update_id = update["update_id"]
+                cb             = update.get("callback_query")
+
+                if cb:
+
+                    data  = cb.get("data", "")
+                    cb_id = cb["id"]
+
+                    if data.startswith("canva_"):
+
+                        article_index = int(data.split("_")[1])
+
+                        print(f"\n✅ Button clicked! Article #{article_index} selected for Canva.")
+
+                        answer_callback(cb_id, "🖼️ Generating image... please wait!")
+
+                        # Run Canva in background thread so listener keeps working
+                        t = threading.Thread(
+                            target=generate_and_send_canva_image,
+                            args=(article_index,),
+                            daemon=True
+                        )
+                        t.start()
+
+        except Exception as e:
+
+            print("LISTENER ERROR:", e)
+            time.sleep(5)
+
+        time.sleep(1)
+
+    print("\n⏹️ Listener stopped.")
+
+# =========================================================
 # URL HELPERS
 # =========================================================
 
@@ -308,12 +522,9 @@ def process_single_entry(entry, category, time_window_h=8):
         return None
 
 # =========================================================
-# LOCAL SCRAPER — BeautifulSoup headline extraction
-# Priority selectors tuned per major Hindi news sites
-# Falls back to generic <a> tag headline hunt
+# LOCAL SCRAPER
 # =========================================================
 
-# Site-specific CSS selectors for headline <a> tags
 SITE_SELECTORS = {
     "amarujala.com":      ["h3 a", "h2 a", ".list-content a", ".news-listing a"],
     "bhaskar.com":        ["h3 a", "h2 a", ".lead-news a", ".list-story a", ".card a"],
@@ -362,18 +573,8 @@ def _is_valid_headline(text):
     return True
 
 def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
-    """
-    Scrape headlines from a LOCAL_SCRAPER website.
-    Strategy:
-      1. Fetch page with rotating headers + retry
-      2. Try site-specific selectors first
-      3. Fall back to generic selectors
-      4. For each headline, attempt full-article fetch via trafilatura
-      5. Return list of news dicts
-    """
     results = []
     try:
-        # --- Fetch page with retry ---
         html = None
         for attempt in range(2):
             try:
@@ -397,8 +598,8 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
             print(f"❌ [{site_name}] Could not fetch page — skipping")
             return results
 
-        soup      = BeautifulSoup(html, "lxml")
-        selectors = _get_selectors(site_url)
+        soup       = BeautifulSoup(html, "lxml")
+        selectors  = _get_selectors(site_url)
         seen_texts = set()
         links_found = []
 
@@ -413,13 +614,11 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
                 if text in seen_texts:
                     continue
 
-                # Build absolute URL
                 if href.startswith("http"):
                     full_url = href
                 elif href.startswith("//"):
                     full_url = "https:" + href
                 elif href.startswith("/"):
-                    # extract base
                     from urllib.parse import urlparse
                     parsed   = urlparse(site_url)
                     full_url = f"{parsed.scheme}://{parsed.netloc}{href}"
@@ -438,7 +637,7 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
         for headline, article_url in links_found:
             article_text = fetch_full_article(article_url)
             if not article_text or len(article_text.strip()) < 80:
-                article_text = headline        # headline as minimal fallback
+                article_text = headline
 
             results.append({
                 "source":   "scraper",
@@ -455,11 +654,10 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
     return results
 
 # =========================================================
-# RSS FEEDS — ORIGINAL + MASSIVELY EXPANDED
+# RSS FEEDS
 # =========================================================
 
 RSS_FEEDS = {
-    # ---------- GEOGRAPHIC: LOCAL FIRST ----------
     "Kushinagar":
         "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en",
     "Gorakhpur":
@@ -480,8 +678,6 @@ RSS_FEEDS = {
         "https://news.google.com/rss/headlines/section/geo/Ayodhya?hl=en-IN&gl=IN&ceid=IN:en",
     "Prayagraj":
         "https://news.google.com/rss/headlines/section/geo/Prayagraj?hl=en-IN&gl=IN&ceid=IN:en",
-
-    # ---------- GOOGLE NEWS TOPIC SEARCH: HINDI REGIONAL ----------
     "GNews_Kushinagar_HI":
         "https://news.google.com/rss/search?q=कुशीनगर&hl=hi-IN&gl=IN&ceid=IN:hi",
     "GNews_Gorakhpur_HI":
@@ -496,8 +692,6 @@ RSS_FEEDS = {
         "https://news.google.com/rss/search?q=UP+crime+uttar+pradesh&hl=en-IN&gl=IN&ceid=IN:en",
     "GNews_UPPolice":
         "https://news.google.com/rss/search?q=UP+police+arrest+encounter&hl=en-IN&gl=IN&ceid=IN:en",
-
-    # ---------- INDIA NATIONAL ----------
     "India":
         "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
     "India Politics":
@@ -532,162 +726,75 @@ RSS_FEEDS = {
         "https://news.google.com/rss/search?q=NEET+exam+india&hl=en-IN&gl=IN&ceid=IN:en",
     "India_Weather":
         "https://news.google.com/rss/search?q=india+weather+flood+rain&hl=en-IN&gl=IN&ceid=IN:en",
-
-    # ---------- AMAR UJALA RSS ----------
-    "AmarUjala_National":
-        "https://www.amarujala.com/rss/india-news.xml",
-    "AmarUjala_UP_RSS":
-        "https://www.amarujala.com/rss/uttar-pradesh.xml",
-    "AmarUjala_Crime_RSS":
-        "https://www.amarujala.com/rss/crime.xml",
-    "AmarUjala_Politics":
-        "https://www.amarujala.com/rss/politics.xml",
-    "AmarUjala_World":
-        "https://www.amarujala.com/rss/world.xml",
-    "AmarUjala_Business":
-        "https://www.amarujala.com/rss/business.xml",
-    "AmarUjala_Sports":
-        "https://www.amarujala.com/rss/sports.xml",
-    "AmarUjala_Entertainment":
-        "https://www.amarujala.com/rss/entertainment.xml",
-    "AmarUjala_Tech":
-        "https://www.amarujala.com/rss/technology.xml",
-
-    # ---------- DAINIK JAGRAN RSS ----------
-    "Jagran_National":
-        "https://www.jagran.com/rss/news-national.xml",
-    "Jagran_UP_RSS":
-        "https://www.jagran.com/rss/news-uttar-pradesh.xml",
-    "Jagran_World":
-        "https://www.jagran.com/rss/news-world.xml",
-    "Jagran_Crime":
-        "https://www.jagran.com/rss/news-crime.xml",
-    "Jagran_Business":
-        "https://www.jagran.com/rss/news-business.xml",
-    "Jagran_Sports":
-        "https://www.jagran.com/rss/news-sports.xml",
-    "Jagran_Entertainment":
-        "https://www.jagran.com/rss/news-entertainment.xml",
-    "Jagran_Tech":
-        "https://www.jagran.com/rss/news-technology.xml",
-
-    # ---------- LIVE HINDUSTAN RSS ----------
-    "Hindustan_National":
-        "https://feed.livehindustan.com/rss/3127",
-    "Hindustan_UP_RSS":
-        "https://feed.livehindustan.com/rss/3130",
-    "Hindustan_World":
-        "https://feed.livehindustan.com/rss/3128",
-    "Hindustan_Crime":
-        "https://feed.livehindustan.com/rss/3131",
-    "Hindustan_Sports":
-        "https://feed.livehindustan.com/rss/3133",
-    "Hindustan_Entertainment":
-        "https://feed.livehindustan.com/rss/3132",
-    "Hindustan_Business":
-        "https://feed.livehindustan.com/rss/3134",
-
-    # ---------- DAINIK BHASKAR RSS ----------
-    "Bhaskar_National":
-        "https://www.bhaskar.com/rss-feed/1061/",
-    "Bhaskar_UP_RSS":
-        "https://www.bhaskar.com/rss-feed/1063/",
-    "Bhaskar_World":
-        "https://www.bhaskar.com/rss-feed/1065/",
-    "Bhaskar_Crime":
-        "https://www.bhaskar.com/rss-feed/1068/",
-    "Bhaskar_Sports":
-        "https://www.bhaskar.com/rss-feed/1071/",
-    "Bhaskar_Business":
-        "https://www.bhaskar.com/rss-feed/1064/",
-    "Bhaskar_Entertainment":
-        "https://www.bhaskar.com/rss-feed/1072/",
-
-    # ---------- NDTV HINDI RSS ----------
-    "NDTV_India":
-        "https://feeds.feedburner.com/ndtvkhabar-samachar",
-    "NDTV_World":
-        "https://feeds.feedburner.com/ndtvkhabar-duniya",
-    "NDTV_Crime":
-        "https://feeds.feedburner.com/ndtvkhabar-crime",
-    "NDTV_Politics":
-        "https://feeds.feedburner.com/ndtvkhabar-politics",
-    "NDTV_Business":
-        "https://feeds.feedburner.com/ndtvkhabar-business",
-    "NDTV_Sports":
-        "https://feeds.feedburner.com/ndtvkhabar-sports",
-
-    # ---------- ABP LIVE RSS ----------
-    "ABP_National":
-        "https://www.abplive.com/feed",
-    "ABP_UP_RSS":
-        "https://www.abplive.com/states/up-uk/feed",
-
-    # ---------- PATRIKA RSS ----------
-    "Patrika_National":
-        "https://api.patrika.com/rss/india-news",
-    "Patrika_UP_RSS":
-        "https://api.patrika.com/rss/uttar-pradesh-news",
-    "Patrika_Crime":
-        "https://api.patrika.com/rss/crime-news",
-    "Patrika_World":
-        "https://api.patrika.com/rss/world-news",
-    "Patrika_Business":
-        "https://api.patrika.com/rss/business-news",
-
-    # ---------- NEWS18 HINDI RSS ----------
-    "News18_Hindi_National":
-        "https://hindi.news18.com/rss/khabar/india.xml",
-    "News18_Hindi_UP_RSS":
-        "https://hindi.news18.com/rss/khabar/uttar-pradesh.xml",
-    "News18_Hindi_Crime":
-        "https://hindi.news18.com/rss/khabar/crime.xml",
-    "News18_Hindi_Politics":
-        "https://hindi.news18.com/rss/khabar/politics-and-nation.xml",
-    "News18_Hindi_World":
-        "https://hindi.news18.com/rss/khabar/world.xml",
-    "News18_Hindi_Business":
-        "https://hindi.news18.com/rss/khabar/business.xml",
-    "News18_Hindi_Sports":
-        "https://hindi.news18.com/rss/khabar/sports.xml",
-    "News18_Hindi_Ent":
-        "https://hindi.news18.com/rss/khabar/entertainment.xml",
-
-    # ---------- INTERNATIONAL / WIRE SERVICES ----------
-    "Reuters World":
-        "https://feeds.reuters.com/Reuters/worldNews",
-    "BBC World":
-        "http://feeds.bbci.co.uk/news/world/rss.xml",
-    "BBC India":
-        "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml",
-    "Al Jazeera":
-        "https://www.aljazeera.com/xml/rss/all.xml",
-    "Reddit India":
-        "https://www.reddit.com/r/india/.rss",
-    "Reddit WorldNews":
-        "https://www.reddit.com/r/worldnews/.rss",
-    "Reddit Geopolitics":
-        "https://www.reddit.com/r/geopolitics/.rss",
-
-    # ---------- GAON CONNECTION (RURAL / AGRI) ----------
-    "GaonConnection_RSS":
-        "https://www.gaonconnection.com/feed",
-
-    # ---------- KRISHIJAGRAN RSS ----------
-    "KrishiJagran_RSS":
-        "https://hindi.krishijagran.com/feed",
-
-    # ---------- SARKARI RESULT / EXAM ----------
-    "SarkariExam_RSS":
-        "https://www.sarkariresult.com/feed/",
+    "AmarUjala_National":   "https://www.amarujala.com/rss/india-news.xml",
+    "AmarUjala_UP_RSS":     "https://www.amarujala.com/rss/uttar-pradesh.xml",
+    "AmarUjala_Crime_RSS":  "https://www.amarujala.com/rss/crime.xml",
+    "AmarUjala_Politics":   "https://www.amarujala.com/rss/politics.xml",
+    "AmarUjala_World":      "https://www.amarujala.com/rss/world.xml",
+    "AmarUjala_Business":   "https://www.amarujala.com/rss/business.xml",
+    "AmarUjala_Sports":     "https://www.amarujala.com/rss/sports.xml",
+    "AmarUjala_Entertainment": "https://www.amarujala.com/rss/entertainment.xml",
+    "AmarUjala_Tech":       "https://www.amarujala.com/rss/technology.xml",
+    "Jagran_National":      "https://www.jagran.com/rss/news-national.xml",
+    "Jagran_UP_RSS":        "https://www.jagran.com/rss/news-uttar-pradesh.xml",
+    "Jagran_World":         "https://www.jagran.com/rss/news-world.xml",
+    "Jagran_Crime":         "https://www.jagran.com/rss/news-crime.xml",
+    "Jagran_Business":      "https://www.jagran.com/rss/news-business.xml",
+    "Jagran_Sports":        "https://www.jagran.com/rss/news-sports.xml",
+    "Jagran_Entertainment": "https://www.jagran.com/rss/news-entertainment.xml",
+    "Jagran_Tech":          "https://www.jagran.com/rss/news-technology.xml",
+    "Hindustan_National":   "https://feed.livehindustan.com/rss/3127",
+    "Hindustan_UP_RSS":     "https://feed.livehindustan.com/rss/3130",
+    "Hindustan_World":      "https://feed.livehindustan.com/rss/3128",
+    "Hindustan_Crime":      "https://feed.livehindustan.com/rss/3131",
+    "Hindustan_Sports":     "https://feed.livehindustan.com/rss/3133",
+    "Hindustan_Entertainment": "https://feed.livehindustan.com/rss/3132",
+    "Hindustan_Business":   "https://feed.livehindustan.com/rss/3134",
+    "Bhaskar_National":     "https://www.bhaskar.com/rss-feed/1061/",
+    "Bhaskar_UP_RSS":       "https://www.bhaskar.com/rss-feed/1063/",
+    "Bhaskar_World":        "https://www.bhaskar.com/rss-feed/1065/",
+    "Bhaskar_Crime":        "https://www.bhaskar.com/rss-feed/1068/",
+    "Bhaskar_Sports":       "https://www.bhaskar.com/rss-feed/1071/",
+    "Bhaskar_Business":     "https://www.bhaskar.com/rss-feed/1064/",
+    "Bhaskar_Entertainment":"https://www.bhaskar.com/rss-feed/1072/",
+    "NDTV_India":           "https://feeds.feedburner.com/ndtvkhabar-samachar",
+    "NDTV_World":           "https://feeds.feedburner.com/ndtvkhabar-duniya",
+    "NDTV_Crime":           "https://feeds.feedburner.com/ndtvkhabar-crime",
+    "NDTV_Politics":        "https://feeds.feedburner.com/ndtvkhabar-politics",
+    "NDTV_Business":        "https://feeds.feedburner.com/ndtvkhabar-business",
+    "NDTV_Sports":          "https://feeds.feedburner.com/ndtvkhabar-sports",
+    "ABP_National":         "https://www.abplive.com/feed",
+    "ABP_UP_RSS":           "https://www.abplive.com/states/up-uk/feed",
+    "Patrika_National":     "https://api.patrika.com/rss/india-news",
+    "Patrika_UP_RSS":       "https://api.patrika.com/rss/uttar-pradesh-news",
+    "Patrika_Crime":        "https://api.patrika.com/rss/crime-news",
+    "Patrika_World":        "https://api.patrika.com/rss/world-news",
+    "Patrika_Business":     "https://api.patrika.com/rss/business-news",
+    "News18_Hindi_National":"https://hindi.news18.com/rss/khabar/india.xml",
+    "News18_Hindi_UP_RSS":  "https://hindi.news18.com/rss/khabar/uttar-pradesh.xml",
+    "News18_Hindi_Crime":   "https://hindi.news18.com/rss/khabar/crime.xml",
+    "News18_Hindi_Politics":"https://hindi.news18.com/rss/khabar/politics-and-nation.xml",
+    "News18_Hindi_World":   "https://hindi.news18.com/rss/khabar/world.xml",
+    "News18_Hindi_Business":"https://hindi.news18.com/rss/khabar/business.xml",
+    "News18_Hindi_Sports":  "https://hindi.news18.com/rss/khabar/sports.xml",
+    "News18_Hindi_Ent":     "https://hindi.news18.com/rss/khabar/entertainment.xml",
+    "Reuters World":        "https://feeds.reuters.com/Reuters/worldNews",
+    "BBC World":            "http://feeds.bbci.co.uk/news/world/rss.xml",
+    "BBC India":            "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml",
+    "Al Jazeera":           "https://www.aljazeera.com/xml/rss/all.xml",
+    "Reddit India":         "https://www.reddit.com/r/india/.rss",
+    "Reddit WorldNews":     "https://www.reddit.com/r/worldnews/.rss",
+    "Reddit Geopolitics":   "https://www.reddit.com/r/geopolitics/.rss",
+    "GaonConnection_RSS":   "https://www.gaonconnection.com/feed",
+    "KrishiJagran_RSS":     "https://hindi.krishijagran.com/feed",
+    "SarkariExam_RSS":      "https://www.sarkariresult.com/feed/",
 }
 
 # =========================================================
-# LOCAL SCRAPERS — WEBSITES TO SCRAPE DIRECTLY
+# LOCAL SCRAPERS
 # =========================================================
 
 LOCAL_SCRAPERS = {
-    # ---- Amar Ujala ----
     "AmarUjala_Kushinagar": "https://www.amarujala.com/uttar-pradesh/kushinagar",
     "AmarUjala_Gorakhpur":  "https://www.amarujala.com/uttar-pradesh/gorakhpur",
     "AmarUjala_Deoria":     "https://www.amarujala.com/uttar-pradesh/deoria",
@@ -696,8 +803,6 @@ LOCAL_SCRAPERS = {
     "AmarUjala_UP":         "https://www.amarujala.com/uttar-pradesh",
     "AmarUjala_Crime":      "https://www.amarujala.com/crime",
     "AmarUjala_National":   "https://www.amarujala.com/india-news",
-
-    # ---- Dainik Bhaskar ----
     "Bhaskar_Kushinagar":   "https://www.bhaskar.com/local/uttar-pradesh/kushinagar/",
     "Bhaskar_Gorakhpur":    "https://www.bhaskar.com/local/uttar-pradesh/gorakhpur/",
     "Bhaskar_Deoria":       "https://www.bhaskar.com/local/uttar-pradesh/deoria/",
@@ -706,8 +811,6 @@ LOCAL_SCRAPERS = {
     "Bhaskar_UP":           "https://www.bhaskar.com/local/uttar-pradesh/",
     "Bhaskar_Crime":        "https://www.bhaskar.com/crime/",
     "Bhaskar_National":     "https://www.bhaskar.com/national/",
-
-    # ---- Live Hindustan ----
     "Hindustan_Kushinagar": "https://www.livehindustan.com/uttar-pradesh/kushinagar",
     "Hindustan_Gorakhpur":  "https://www.livehindustan.com/uttar-pradesh/gorakhpur",
     "Hindustan_Deoria":     "https://www.livehindustan.com/uttar-pradesh/deoria",
@@ -715,8 +818,6 @@ LOCAL_SCRAPERS = {
     "Hindustan_Basti":      "https://www.livehindustan.com/uttar-pradesh/basti",
     "Hindustan_UP":         "https://www.livehindustan.com/uttar-pradesh",
     "Hindustan_Crime":      "https://www.livehindustan.com/crime",
-
-    # ---- Dainik Jagran ----
     "Jagran_Gorakhpur":     "https://www.jagran.com/uttar-pradesh/gorakhpur-city-news-hindi.html",
     "Jagran_Kushinagar":    "https://www.jagran.com/uttar-pradesh/kushinagar-news-hindi.html",
     "Jagran_Deoria":        "https://www.jagran.com/uttar-pradesh/deoria-news-hindi.html",
@@ -725,97 +826,64 @@ LOCAL_SCRAPERS = {
     "Jagran_UP":            "https://www.jagran.com/uttar-pradesh/",
     "Jagran_Crime":         "https://www.jagran.com/crime/",
     "Jagran_National":      "https://www.jagran.com/news/national.html",
-
-    # ---- Patrika ----
     "Patrika_Gorakhpur":    "https://www.patrika.com/gorakhpur-news/",
     "Patrika_Deoria":       "https://www.patrika.com/deoria-news/",
     "Patrika_UP":           "https://www.patrika.com/uttar-pradesh-news/",
     "Patrika_Crime":        "https://www.patrika.com/crime/",
     "Patrika_National":     "https://www.patrika.com/national-news/",
-
-    # ---- News18 Hindi ----
     "News18_UP":            "https://hindi.news18.com/uttar-pradesh/",
     "News18_Gorakhpur":     "https://hindi.news18.com/news/uttar-pradesh/gorakhpur/",
     "News18_Kushinagar":    "https://hindi.news18.com/news/uttar-pradesh/kushinagar/",
     "News18_Crime":         "https://hindi.news18.com/crime/",
     "News18_National":      "https://hindi.news18.com/india/",
-
-    # ---- ETV Bharat ----
     "ETVBharat_UP":         "https://www.etvbharat.com/hindi/uttar-pradesh",
     "ETVBharat_Gorakhpur":  "https://www.etvbharat.com/hindi/uttar-pradesh/state/gorakhpur",
     "ETVBharat_Kushinagar": "https://www.etvbharat.com/hindi/uttar-pradesh/state/kushinagar",
     "ETVBharat_Crime":      "https://www.etvbharat.com/hindi/crime",
-
-    # ---- Zee News ----
     "ZeeUPUK":              "https://zeenews.india.com/hindi/india/up-uttarakhand",
     "ZeeUP":                "https://zeenews.india.com/hindi/tags/uttar-pradesh-news.html",
     "ZeeGorakhpur":         "https://zeenews.india.com/hindi/tags/gorakhpur-news.html",
     "ZeeCrime":             "https://zeenews.india.com/hindi/crime",
-
-    # ---- TV9 Bharatvarsh ----
     "TV9_UP":               "https://www.tv9hindi.com/state/uttar-pradesh",
     "TV9_Gorakhpur":        "https://www.tv9hindi.com/tag/gorakhpur",
     "TV9_Kushinagar":       "https://www.tv9hindi.com/tag/kushinagar",
     "TV9_Crime":            "https://www.tv9hindi.com/crime",
-
-    # ---- Aaj Tak ----
     "AajTak_UP":            "https://www.aajtak.in/uttar-pradesh",
     "AajTak_Gorakhpur":     "https://www.aajtak.in/topic/gorakhpur",
     "AajTak_Kushinagar":    "https://www.aajtak.in/topic/kushinagar",
     "AajTak_Crime":         "https://www.aajtak.in/crime",
-
-    # ---- ABP News ----
     "ABP_UP":               "https://www.abplive.com/states/up-uk",
     "ABP_Gorakhpur":        "https://www.abplive.com/topic/gorakhpur",
     "ABP_Kushinagar":       "https://www.abplive.com/topic/kushinagar",
-
-    # ---- India TV ----
     "IndiaTV_UP":           "https://www.indiatv.in/uttar-pradesh",
     "IndiaTV_Gorakhpur":    "https://www.indiatv.in/topic/gorakhpur",
     "IndiaTV_Kushinagar":   "https://www.indiatv.in/topic/kushinagar",
-
-    # ---- OneIndia ----
     "OneIndia_UP":          "https://hindi.oneindia.com/news/uttar-pradesh/",
     "OneIndia_Gorakhpur":   "https://hindi.oneindia.com/topic/gorakhpur/",
-
-    # ---- Webdunia ----
     "Webdunia_UP":          "https://hindi.webdunia.com/regional-hindi-news/uttar-pradesh/",
-
-    # ---- Local Small Media ----
     "GorakhpurLive":        "https://gorakhpurlive.com/",
     "PurvanchalNews":       "https://purvanchalnews.com/",
     "UPTak":                "https://www.uptak.in/",
     "GaonConnection":       "https://www.gaonconnection.com/",
     "JanSatta_UP":          "https://www.jansatta.com/national/uttar-pradesh/",
-
-    # ---- Government / Admin ----
     "UPPolice":             "https://uppolice.gov.in/",
     "PIB_UP":               "https://pib.gov.in/statewise.aspx?state=U",
-
-    # ---- Weather / Disaster ----
     "IMD":                  "https://mausam.imd.gov.in/",
     "FloodAlerts":          "https://cwc.gov.in/flood-forecast-monitoring",
-
-    # ---- Education / Jobs ----
     "SarkariResult":        "https://www.sarkariresult.com/",
     "UPPSC":                "https://uppsc.up.nic.in/",
     "UPBoard":              "https://upmsp.edu.in/",
-
-    # ---- Agriculture / Rural ----
     "KrishiJagran":         "https://www.krishijagran.com/",
     "GaonConn_Agri":        "https://www.gaonconnection.com/kheti-kisani",
-
-    # ---- Health ----
     "NHM_UP":               "https://upnrhm.gov.in/",
     "HealthDeptUP":         "http://up-health.in/",
 }
 
 # =========================================================
-# YOUTUBE FEEDS — ORIGINAL + EXPANDED
+# YOUTUBE FEEDS
 # =========================================================
 
 YOUTUBE_FEEDS = {
-    # ---- Original ----
     "AajTak":
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCt4t-jeY85JegMlZ-E5UWtA",
     "ANI":
@@ -824,8 +892,6 @@ YOUTUBE_FEEDS = {
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCttspZesZIDEwwpVIgoZtWQ",
     "TV9 Bharatvarsh":
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCP0uG-mcMImgKnJz-VsQxKQ",
-
-    # ---- Expanded Hindi News ----
     "ABPNews":
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCIvaH_4U3A3fkHPCB8-7ExQ",
     "ZeeNews":
@@ -846,8 +912,6 @@ YOUTUBE_FEEDS = {
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCPvnVbqIwWMVwWKbOJf7vlQ",
     "JanTak_TV":
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCpKkGSV1yvA2JraTFYvOBrQ",
-
-    # ---- Local / Purvanchal YouTube ----
     "GorakhpurNews18":
         "https://www.youtube.com/feeds/videos.xml?channel_id=UCHExuHVAMnm0PgXxjCxGqjA",
     "PurvanchalSamachar":
@@ -938,7 +1002,7 @@ for news in all_news:
             headline_frequencies[word] = headline_frequencies.get(word, 0) + 1.0
 
 # =========================================================
-# REMOVE DUPLICATES (across RSS + scrapers combined)
+# REMOVE DUPLICATES
 # =========================================================
 
 filtered_news = []
@@ -959,7 +1023,6 @@ print(f"\n✅ UNIQUE NEWS ITEMS AFTER DEDUP: {len(filtered_news)}")
 
 def generate_ai_response(prompt, headline="", category="", article_text="", link=""):
 
-    # GROQ ENGINE LOOP
     if groq_client:
         for model_name in GROQ_MODELS:
             for attempt in range(3):
@@ -987,7 +1050,6 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         print("❌ GROQ FAILED:", e)
                         break
 
-    # SAMBANOVA ENGINE LOOP
     if samba_client:
         for model_name in SAMBANOVA_MODELS:
             for attempt in range(3):
@@ -1012,7 +1074,6 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         print("❌ SAMBANOVA FAILED:", e)
                         break
 
-    # HUGGINGFACE ENGINE LOOP
     if hf_client:
         for model_name in HF_MODELS:
             try:
@@ -1032,7 +1093,6 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     break
                 print("❌ HF FAILED:", e)
 
-    # OPENROUTER ENGINE LOOP
     if not OPENROUTER_API_KEY:
         print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter")
     else:
@@ -1170,7 +1230,7 @@ Political Toxicity: 0/10
 """
 
 # =========================================================
-# KEYWORD BANKS (unchanged from original — fully preserved)
+# KEYWORD BANKS
 # =========================================================
 
 LOCAL_WORDS = [
@@ -1296,9 +1356,9 @@ EMOTIONAL_WORDS = [
 # MAIN SCORING + AI LOOP
 # =========================================================
 
-results = []
+results      = []
+article_idx  = 0   # counter for article_store keys
 
-# Identify scraper categories that are hyper-local
 HYPER_LOCAL_SCRAPER_KEYS = {
     k for k in LOCAL_SCRAPERS
     if any(loc in k.lower() for loc in [
@@ -1308,6 +1368,7 @@ HYPER_LOCAL_SCRAPER_KEYS = {
 }
 
 for row in filtered_news:
+
     headline     = row["headline"]
     category     = row["category"]
     link         = row["link"]
@@ -1365,7 +1426,6 @@ for row in filtered_news:
     if category in ["Crime", "Breaking"]:
         controversy_bonus += 2
 
-    # Scraped articles from local sites get a direct local bonus
     if source == "scraper" and category in HYPER_LOCAL_SCRAPER_KEYS:
         local_bonus += 1.5
 
@@ -1409,6 +1469,7 @@ Source Link: {link}
 """
 
     try:
+
         ai_result = generate_ai_response(
             prompt=prompt,
             headline=headline,
@@ -1416,39 +1477,6 @@ Source Link: {link}
             article_text=article_text,
             link=link
         )
-       
-
-        # =====================================================
-        # GENERATE CANVA AI POSTER
-        # =====================================================
-    
-        print("🎨 GENERATING CANVA AI POSTER...")
-    
-        visual_prompt = f"""
-        Breaking Indian news poster.
-    
-        Headline:
-        {headline}
-    
-        Category:
-        {category}
-    
-        News Summary:
-        {ai_result[:500]}
-    
-        Style:
-        Ultra realistic
-        Hindi breaking news
-        Indian newsroom
-        Cinematic lighting
-        Viral Instagram post
-        Red and black theme
-        1080x1350 portrait
-        """
-    
-        generate_news_poster(visual_prompt)
-    
-        print("✅ CANVA POSTER GENERATED")
 
         emotion_match  = re.search(r"Emotion Score:\s*(\d+)/10", ai_result)
         virality_match = re.search(r"Virality Score:\s*(\d+)/10", ai_result)
@@ -1480,21 +1508,6 @@ Source Link: {link}
             continue
 
         print(f"🚀 FINAL SCORE PASSED ({final_score}) — SENDING TELEGRAM")
-        # =====================================================
-        # GENERATE CANVA AI POSTER
-        # =====================================================
-        
-        try:
-        
-            print("🎨 GENERATING CANVA POSTER...")
-        
-            generate_news_poster(ai_result)
-        
-            print("✅ POSTER GENERATED")
-        
-        except Exception as e:
-        
-            print("❌ CANVA ERROR:", e)
 
         cleaned_link = clean_url(link)
         short_link   = shorten_url(cleaned_link)
@@ -1521,11 +1534,38 @@ Follow us on:
 📘 Facebook: https://www.facebook.com/share/1D627R2qFV/
 """
 
-        send_telegram_photo(
-            photo_path="downloads/news.png",
-            caption=telegram_message
-        )
-        print("✅ SENT TO TELEGRAM")
+        # =====================================================
+        # STORE ARTICLE IN MEMORY FOR BUTTON CLICK  ← NEW
+        # =====================================================
+
+        article_idx += 1
+
+        article_store[article_idx] = {
+            "headline":      headline,
+            "category":      category,
+            "link":          short_link,
+            "emotion_score": emotion_score,
+            "virality_score":virality_score,
+            "toxicity_score":toxicity_score,
+            "trending_score":trending_score,
+            "final_score":   final_score,
+            "ai_result":     ai_result,
+            "source":        source,
+        }
+
+        # =====================================================
+        # SEND TO ALL CHAT IDs WITH 🖼️ GENERATE IMAGE BUTTON
+        # ← NEW: replaces the old send_telegram_message call
+        # =====================================================
+
+        chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
+        if not chat_ids and CHAT_ID:
+            chat_ids = [CHAT_ID]
+
+        for cid in chat_ids:
+            send_article_with_button(cid, article_idx, telegram_message)
+
+        print(f"✅ ARTICLE #{article_idx} SENT TO TELEGRAM WITH BUTTON")
 
         results.append({
             "source":         source,
@@ -1561,3 +1601,19 @@ if not results_df.empty:
     print(f"✅ TOTAL SENT: {len(results_df)}")
 else:
     print("\n❌ NO HIGH VIRAL NEWS FOUND")
+
+# =========================================================
+# START LISTENING FOR 🖼️ BUTTON CLICKS  ← NEW
+# Waits 30 minutes for you to tap buttons in Telegram
+# =========================================================
+
+if article_store:
+    print(f"\n✅ {len(article_store)} articles sent. Waiting for your image button taps...")
+    stop_event = threading.Event()
+    try:
+        listen_for_button_clicks(stop_event, timeout_minutes=30)
+    except KeyboardInterrupt:
+        print("\n🛑 Stopped. Goodbye!")
+        stop_event.set()
+else:
+    print("\n❌ No articles passed scoring — nothing to listen for.")
