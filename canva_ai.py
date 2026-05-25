@@ -64,6 +64,8 @@ SIZE:
 1080x1350 portrait Instagram post
 """
 
+    os.makedirs("downloads", exist_ok=True)
+
     with sync_playwright() as p:
 
         browser = p.chromium.launch(
@@ -86,7 +88,7 @@ SIZE:
         # LOGIN
         # =================================================
 
-        if "login" in page.url.lower():
+        if "login" in page.url.lower() or page.locator('input[type="email"]').count() > 0:
 
             print("🔐 Logging into Canva...")
 
@@ -112,6 +114,10 @@ SIZE:
 
             time.sleep(10)
 
+            page.goto("https://www.canva.com/ai-image-generator/")
+
+            time.sleep(6)
+
         # =================================================
         # ENTER AI PROMPT
         # =================================================
@@ -119,6 +125,8 @@ SIZE:
         print("✍️ Sending article to Canva AI...")
 
         textarea = page.locator("textarea").first
+
+        textarea.wait_for(state="visible", timeout=15000)
 
         textarea.click()
 
@@ -146,89 +154,80 @@ SIZE:
 
         print("⏳ Waiting for Canva AI generation...")
 
-        time.sleep(40)
+        time.sleep(60)
 
         print("✅ AI poster generated")
 
         # =================================================
-        # OPEN GENERATED IMAGE
+        # DOWNLOAD IMAGE — METHOD 1: keyboard shortcut
         # =================================================
 
-        try:
-
-            generated_image = page.locator("img").nth(0)
-
-            generated_image.click()
-
-            print("✅ Opened generated poster")
-
-        except Exception as e:
-
-            print("❌ Could not open image:", e)
-
-        time.sleep(5)
-
-        # =================================================
-        # DOWNLOAD IMAGE
-        # =================================================
+        save_path = "downloads/news.png"
+        downloaded = False
 
         try:
 
             print("📥 Downloading poster...")
 
-            page.keyboard.press("Control+Shift+E")
+            with page.expect_download(timeout=30000) as download_info:
 
-            time.sleep(5)
+                page.keyboard.press("Control+Shift+E")
 
-            download_button = page.locator(
-                "text=Download"
-            ).last
-# =====================================================
-# DOWNLOAD IMAGE
-# =====================================================
+                time.sleep(5)
 
-try:
+                download_button = page.locator(
+                    "button"
+                ).filter(
+                    has_text="Download"
+                ).last
 
-    print("📥 Downloading poster...")
+                download_button.click()
 
-    with page.expect_download() as download_info:
+            download = download_info.value
 
-        page.keyboard.press("Control+Shift+E")
+            download.save_as(save_path)
 
-        time.sleep(5)
+            downloaded = True
 
-        download_button = page.locator(
-            "text=Download"
-        ).last
+            print(f"✅ IMAGE SAVED: {save_path}")
 
-        download_button.click()
+        except Exception as e:
 
-    download = download_info.value
+            print(f"⚠️ Download method 1 failed: {e}")
 
-    save_path = "downloads/news_poster.png"
+        # =================================================
+        # DOWNLOAD IMAGE — METHOD 2: direct button fallback
+        # =================================================
 
-    download.save_as(save_path)
+        if not downloaded:
 
-    print(f"✅ IMAGE SAVED: {save_path}")
+            try:
 
-    return save_path
+                print("📥 Trying alternate download method...")
 
-except Exception as e:
+                with page.expect_download(timeout=30000) as download_info:
 
-    print("❌ Download failed:", e)
+                    page.locator(
+                        "button"
+                    ).filter(
+                        has_text="Download"
+                    ).last.click()
 
-    return None
+                download = download_info.value
 
-# =========================================================
-# EXAMPLE USAGE
-# =========================================================
+                download.save_as(save_path)
 
-article = """
-गोरखपुर में देर रात बड़ा सड़क हादसा हुआ।
-तेज रफ्तार ट्रक और बस की टक्कर में कई लोग घायल हो गए।
-घटना के बाद इलाके में अफरा-तफरी मच गई।
-पुलिस और प्रशासन मौके पर पहुंच गया।
-स्थानीय लोगों ने राहत कार्य शुरू किया।
-"""
+                downloaded = True
 
-generate_news_poster(article)
+                print(f"✅ IMAGE SAVED (method 2): {save_path}")
+
+            except Exception as e:
+
+                print(f"❌ Both download methods failed: {e}")
+
+        browser.close()
+
+        if downloaded:
+            return save_path
+
+        return None
