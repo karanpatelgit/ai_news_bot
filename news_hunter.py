@@ -1335,16 +1335,16 @@ for row in filtered_news:
     print("✅ PRE-SCORE PASSED — RUNNING AI ENGINE")
 
     # Detect language mode based on category
-_local_cats = {
-    'Kushinagar','Gorakhpur','Maharajganj','Deoria','Basti',
-    'GNews_Kushinagar_HI','GNews_Gorakhpur_HI','GNews_Purvanchal_HI'
-}
-_is_local_lang = is_local or category in _local_cats
-_lang_instruction = (
-    "भाषा: शुद्ध हिंदी — आसान, बोलचाल की हिंदी जो गाँव और कस्बे का आम इंसान भी समझ सके।"
-    if _is_local_lang else
-    "Language: Hinglish — Hindi main likho lekin impactful English words naturally mix karo (jaise: viral, breaking, update, reaction, shocking). Avoid full English sentences."
-)
+    _local_cats = {
+        'Kushinagar','Gorakhpur','Maharajganj','Deoria','Basti',
+        'GNews_Kushinagar_HI','GNews_Gorakhpur_HI','GNews_Purvanchal_HI'
+    }
+    _is_local_lang = is_local or category in _local_cats
+    _lang_instruction = (
+        "भाषा: शुद्ध हिंदी — आसान, बोलचाल की हिंदी जो गाँव और कस्बे का आम इंसान भी समझ सके।"
+        if _is_local_lang else
+        "Language: Hinglish — Hindi main likho lekin impactful English words naturally mix karo (jaise: viral, breaking, update, reaction, shocking). Avoid full English sentences."
+    )
 
 prompt = f"""
 Tu ek expert social media news writer hai jo Facebook aur Instagram ke liye viral, monetization-friendly content likhta hai.
