@@ -8,3 +8,4 @@ lxml
 trafilatura
 requests
 playwright
+pillow
