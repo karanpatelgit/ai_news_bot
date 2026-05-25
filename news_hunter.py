@@ -472,6 +472,15 @@ RSS_FEEDS = {
 
     "India_Pakistan":
         "https://news.google.com/rss/search?q=india+pakistan&hl=en-IN&gl=IN&ceid=IN:en",
+    "India": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en", 
+    "India Politics": "https://news.google.com/rss/search?q=india+politics&hl=en-IN&gl=IN&ceid=IN:en",
+    "India_Economy":
+        "https://news.google.com/rss/search?q=india+economy&hl=en-IN&gl=IN&ceid=IN:en",
+
+    "India_Weather":
+        "https://news.google.com/rss/search?q=india+weather+flood+rain&hl=en-IN&gl=IN&ceid=IN:en",
+    "India_Viral":
+        "https://news.google.com/rss/search?q=viral+india&hl=en-IN&gl=IN&ceid=IN:en",
 
     # =====================================================
     # VIRAL CATEGORIES
@@ -518,9 +527,11 @@ RSS_FEEDS = {
     "BBC_India":
         "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml",
 
+    "BBC_World":
+        "http://feeds.bbci.co.uk/news/world/rss.xml",
+
     "Al_Jazeera":
         "https://www.aljazeera.com/xml/rss/all.xml",
-
     # =====================================================
     # REDDIT SIGNALS (OPTIONAL BUT GOOD)
     # =====================================================
@@ -579,6 +590,9 @@ LOCAL_SCRAPERS = {
 
     "PurvanchalNews":
         "https://purvanchalnews.com/",
+    "GaonConnection":
+        "https://www.gaonconnection.com/feed",
+
 }
 
 
