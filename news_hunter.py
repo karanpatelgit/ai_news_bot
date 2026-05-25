@@ -1346,7 +1346,7 @@ for row in filtered_news:
         "Language: Hinglish — Hindi main likho lekin impactful English words naturally mix karo (jaise: viral, breaking, update, reaction, shocking). Avoid full English sentences."
     )
 
-prompt = f"""
+    prompt = f"""
 Tu ek expert social media news writer hai jo Facebook aur Instagram ke liye viral, monetization-friendly content likhta hai.
 Tera channel hai "@karan_patel_kushinagar" — local Purvanchal ki awaaz, sach aur speed ke saath.
 
