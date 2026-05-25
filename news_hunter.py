@@ -147,33 +147,8 @@ OPENROUTER_MODELS = [
     "deepseek/deepseek-chat:free"
 ]
 
-# =========================================================
-# OPENROUTER IMAGE GENERATION MODELS (ordered by quality)
-# Primary: Gemini Flash Image (best quality, low cost)
-# Fallback chain: flux-schnell free → flux-dev free
-# =========================================================
 
-# =========================================================
-# OPENROUTER IMAGE MODELS
-# =========================================================
 
-# =========================================================
-# OPENROUTER MODELS
-# =========================================================
-
-OPENROUTER_IMAGE_MODELS = [
-
-    {
-        "model": "openrouter/auto",
-        "label": "OpenRouter Auto Router"
-    },
-
-    {
-        "model": "google/gemini-2.5-flash-image",
-        "label": "Gemini Flash Image"
-    }
-
-]
 # =========================================================
 # DUPLICATE DETECTION
 # =========================================================
@@ -258,9 +233,8 @@ def send_telegram_photo(photo_path, caption):
 # ██████████████████████████████████████████████████████
 # IMAGE GENERATION PIPELINE
 # Priority 1 → Hugging Face
-# Priority 2 → open router
-# Priority 3 → Canva AI (Playwright headless fallback)
-# Priority 4 → Pollinations.AI (last resort, free)
+# Priority 2 → Canva AI (Playwright headless fallback)
+# Priority 3 → Pollinations.AI (last resort, free)
 # ██████████████████████████████████████████████████████
 # =========================================================
 
@@ -383,86 +357,6 @@ def generate_image_huggingface(prompt, save_path):
             time.sleep(5)
 
 # =========================================================
-# OPENROUTER IMAGE GEN
-# =========================================================
-
-def generate_image_openrouter(prompt, save_path):
-
-    if not OPENROUTER_API_KEY:
-        return None
-
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    for model in OPENROUTER_IMAGE_MODELS:
-
-        model_id = model["model"]
-
-        print(f"🎨 Trying OpenRouter: {model_id}")
-
-        payload = {
-            "model": model_id,
-
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        }
-
-        try:
-
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=180
-            )
-
-            if response.status_code != 200:
-
-                print(f"❌ OR Error {response.status_code}")
-
-                continue
-
-            data = response.json()
-
-            choices = data.get("choices", [])
-
-            if not choices:
-                continue
-
-            message = choices[0].get("message", {})
-
-            images = message.get("images", [])
-
-            if not images:
-                continue
-
-            image_url = images[0]["image_url"]["url"]
-
-            if image_url.startswith("data:image"):
-
-                image_data = image_url.split(",")[1]
-
-                with open(save_path, "wb") as f:
-                    f.write(base64.b64decode(image_data))
-
-                print(f"✅ OpenRouter image saved")
-
-                return save_path
-
-        except Exception as e:
-
-            print(f"❌ OpenRouter failed: {e}")
-
-    return None
-
-
-# =========================================================
 # CANVA AI
 # =========================================================
 
@@ -569,17 +463,6 @@ def generate_news_image(
     if result:
         return result
 
-    # =====================================================
-    # PRIORITY 2 — OPENROUTER
-    # =====================================================
-
-    result = generate_image_openrouter(
-        prompt,
-        save_path
-    )
-
-    if result:
-        return result
 
     # =====================================================
     # PRIORITY 3 — CANVA
