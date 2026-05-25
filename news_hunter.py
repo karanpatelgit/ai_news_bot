@@ -17,6 +17,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from difflib import SequenceMatcher
 import random
+import io
+import urllib.parse
+
+from PIL import Image
 
 # =========================================================
 # LOAD ENV VARIABLES
@@ -153,22 +157,20 @@ OPENROUTER_MODELS = [
 # OPENROUTER IMAGE MODELS
 # =========================================================
 
+# =========================================================
+# OPENROUTER MODELS
+# =========================================================
+
 OPENROUTER_IMAGE_MODELS = [
 
-    # =====================================================
-    # GOOGLE GEMINI IMAGE
-    # =====================================================
-
     {
-        "model": "google/gemini-2.5-flash-image",
-        "modalities": ["image", "text"],
-        "label": "Gemini 2.5 Flash Image"
+        "model": "openrouter/auto",
+        "label": "OpenRouter Auto Router"
     },
 
     {
-        "model": "google/gemini-2.5-flash-image-preview",
-        "modalities": ["image", "text"],
-        "label": "Gemini 2.5 Flash Image Preview"
+        "model": "google/gemini-2.5-flash-image",
+        "label": "Gemini Flash Image"
     }
 
 ]
@@ -255,298 +257,350 @@ def send_telegram_photo(photo_path, caption):
 # =========================================================
 # ██████████████████████████████████████████████████████
 # IMAGE GENERATION PIPELINE
-# Priority 1 → OpenRouter (Gemini / FLUX)
-# Priority 2 → Canva AI (Playwright headless fallback)
-# Priority 3 → Pollinations.AI (last resort, free)
+# Priority 1 → Hugging Face
+# Priority 2 → open router
+# Priority 3 → Canva AI (Playwright headless fallback)
+# Priority 4 → Pollinations.AI (last resort, free)
 # ██████████████████████████████████████████████████████
 # =========================================================
 
+# =========================================================
+# PROMPT BUILDER
+# =========================================================
+
 def build_image_prompt(headline, category, ai_result):
-    """
-    Builds a vivid, detailed image generation prompt
-    for an Indian breaking news poster.
-    """
-    summary_snip = ai_result[:300] if ai_result else headline
 
-    prompt = f"""Create an ultra realistic Indian breaking news Instagram poster.
+    summary = ai_result[:500] if ai_result else headline
 
-NEWS HEADLINE: {headline}
-CATEGORY: {category}
-SUMMARY: {summary_snip}
+    prompt = f"""
+Create an ultra realistic Indian breaking news Instagram poster.
 
-VISUAL STYLE INSTRUCTIONS:
-- Ultra realistic professional Indian news media graphic
-- Cinematic newsroom style with dramatic lighting
-- Viral social media breaking news aesthetic
-- Add realistic environment matching the news context:
-  * Crime news → police, sirens, tension scene
-  * Politics → politicians, crowd, parliament style
-  * Flood/disaster → realistic disaster scene
-  * International → geopolitical newsroom graphics
-- Hindi news channel visual quality
-- Strong emotional storytelling
-- Bold headline composition area
-- Red + black + yellow Indian news color palette
-- High contrast, sharp details, studio quality
-- Realistic Indian atmosphere and humans
-- Mobile friendly portrait composition
-- Modern breaking news design
-- NO watermarks
-- Instagram optimized 4:5 portrait format"""
+HEADLINE:
+{headline}
+
+CATEGORY:
+{category}
+
+SUMMARY:
+{summary}
+
+STYLE:
+- Indian TV news style
+- Ultra realistic
+- Cinematic
+- Dramatic newsroom lighting
+- Red black yellow palette
+- Breaking news aesthetic
+- Realistic Indian people
+- Hyper detailed
+- Professional typography area
+- Viral social media look
+- Mobile friendly
+- Emotional storytelling
+- High contrast
+- 4:5 Instagram portrait
+
+SPECIAL CONTEXT:
+- Crime → police, sirens, investigation
+- Politics → leaders, parliament, crowd
+- Disaster → realistic destruction scene
+- International → geopolitical newsroom
+
+IMPORTANT:
+- No watermark
+- No text glitches
+- Professional news quality
+- Realistic faces
+- Studio quality
+"""
 
     return prompt
 
 
-# ----------------------------------------------------------
-# METHOD 1 — OpenRouter Image Generation
-# Uses /api/v1/chat/completions with modalities=["image"]
-# Returns saved file path or None
-# ----------------------------------------------------------
+# =========================================================
+# HUGGINGFACE FLUX
+# FREE + HIGH QUALITY
+# =========================================================
 
-def generate_image_openrouter(prompt, save_path):
-    """
-    Tries each OpenRouter image model in sequence.
-    Returns save_path on success, None on total failure.
-    """
-    if not OPENROUTER_API_KEY:
-        print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter image gen")
+def generate_image_huggingface(prompt, save_path):
+
+    if not HF_TOKEN:
+        print("⚠️ HF_TOKEN missing")
         return None
 
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    print("🎨 Trying HuggingFace FLUX...")
+
+    API_URL = (
+        "https://api-inference.huggingface.co/models/"
+        "black-forest-labs/FLUX.1-schnell"
+    )
 
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type":  "application/json",
-        "HTTP-Referer":  "https://github.com/karanpatelgit/ai_news_bot",
-        "X-Title":       "News Hunter Bot"
+        "Authorization": f"Bearer {HF_TOKEN}"
     }
 
-    for model_info in OPENROUTER_IMAGE_MODELS:
-
-        model_id   = model_info["model"]
-        modalities = model_info["modalities"]
-        label      = model_info["label"]
-
-        print(f"🎨 Trying OpenRouter image model: {label} ({model_id})")
-
-        payload = {
-            "model":      model_id,
-            "modalities": modalities,
-            "messages": [
-                {
-                    "role":    "user",
-                    "content": prompt
-                }
-            ],
-            # portrait 4:5 ratio for Instagram
-            "image_config": {
-                "aspect_ratio": "4:5"
-            }
-        }
-
-        try:
-            resp = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=120
-            )
-
-            if resp.status_code != 200:
-                print(f"❌ OpenRouter image HTTP {resp.status_code} for {label}: {resp.text[:200]}")
-                continue
-
-            data = resp.json()
-
-            # OpenRouter returns images in choices[0].message.images
-            choices = data.get("choices", [])
-            if not choices:
-                print(f"⚠️ No choices in OpenRouter image response for {label}")
-                continue
-
-            message = choices[0].get("message", {})
-            images  = message.get("images", [])
-
-            if not images:
-                # Some models return base64 inside content instead
-                content = message.get("content", "")
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "image_url":
-                            image_url = block.get("image_url", {}).get("url", "")
-                            if image_url.startswith("data:image"):
-                                b64_data = image_url.split(",", 1)[1]
-                                with open(save_path, "wb") as f:
-                                    f.write(base64.b64decode(b64_data))
-                                print(f"✅ OpenRouter image saved (content block): {save_path}")
-                                return save_path
-                print(f"⚠️ No images field in OpenRouter response for {label}")
-                continue
-
-            # Extract first image
-            img_obj   = images[0]
-            image_url = img_obj.get("image_url", {}).get("url", "")
-
-            if not image_url:
-                print(f"⚠️ Empty image URL from {label}")
-                continue
-
-            if image_url.startswith("data:image"):
-                # base64 data URL
-                b64_data = image_url.split(",", 1)[1]
-                with open(save_path, "wb") as f:
-                    f.write(base64.b64decode(b64_data))
-                print(f"✅ OpenRouter image saved (base64): {save_path}")
-                return save_path
-
-            elif image_url.startswith("http"):
-                # Remote URL — download it
-                img_resp = requests.get(image_url, timeout=60)
-                if img_resp.status_code == 200:
-                    with open(save_path, "wb") as f:
-                        f.write(img_resp.content)
-                    print(f"✅ OpenRouter image downloaded and saved: {save_path}")
-                    return save_path
-                else:
-                    print(f"❌ Failed to download image from URL: {img_resp.status_code}")
-                    continue
-
-            else:
-                print(f"⚠️ Unrecognized image URL format from {label}: {image_url[:60]}")
-                continue
-
-        except Exception as e:
-            print(f"❌ OpenRouter image error for {label}: {e}")
-            continue
-
-    print("❌ All OpenRouter image models failed")
-    return None
-
-
-# ----------------------------------------------------------
-# METHOD 2 — Canva AI (Playwright headless fallback)
-# Wraps your existing canva_ai.py generate_news_poster()
-# Returns saved file path or None
-# ----------------------------------------------------------
-
-def generate_image_canva(prompt, save_path):
-    """
-    Falls back to Canva AI via Playwright.
-    Only works if canva_ai.py is present and CANVA_EMAIL/PASSWORD are set.
-    """
-    if not CANVA_EMAIL or not CANVA_PASSWORD:
-        print("⚠️ Canva credentials not set — skipping Canva fallback")
-        return None
+    payload = {
+        "inputs": prompt
+    }
 
     try:
-        from canva_ai import generate_news_poster
-        print("🎨 Trying Canva AI fallback...")
 
-        result_path = generate_news_poster(prompt)
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json=payload,
+            timeout=180
+        )
 
-        if result_path and os.path.exists(result_path):
-            # Copy to our desired save_path
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            with open(result_path, "rb") as src, open(save_path, "wb") as dst:
-                dst.write(src.read())
-            print(f"✅ Canva image saved: {save_path}")
-            return save_path
-        else:
-            print("❌ Canva returned no image")
+        if response.status_code != 200:
+            print(f"❌ HF Error {response.status_code}")
+            print(response.text[:300])
             return None
 
-    except ImportError:
-        print("⚠️ canva_ai.py not found — skipping Canva fallback")
-        return None
-    except Exception as e:
-        print(f"❌ Canva fallback error: {e}")
-        return None
+        image = Image.open(io.BytesIO(response.content))
 
-
-# ----------------------------------------------------------
-# METHOD 3 — Pollinations.AI (last resort, always free)
-# Simple GET request, no API key needed
-# Returns saved file path or None
-# ----------------------------------------------------------
-
-def generate_image_pollinations(prompt, save_path):
-    """
-    Last-resort free image generation via Pollinations.AI.
-    No API key required. Quality is lower but always works.
-    """
-    try:
-        print("🎨 Trying Pollinations.AI (last resort)...")
+        image = image.resize((1080, 1350))
 
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
-        # Encode prompt for URL
-        import urllib.parse
-        encoded_prompt = urllib.parse.quote(prompt[:500])
+        image.save(save_path)
 
-        # Pollinations supports width/height params
-        # 864x1080 ≈ 4:5 portrait for Instagram
-        poll_url = (
-            f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-            f"?width=864&height=1080&model=flux&nologo=true&enhance=true"
-        )
+        print(f"✅ HuggingFace image saved: {save_path}")
 
-        resp = requests.get(poll_url, timeout=120)
-
-        if resp.status_code == 200 and len(resp.content) > 5000:
-            with open(save_path, "wb") as f:
-                f.write(resp.content)
-            print(f"✅ Pollinations image saved: {save_path}")
-            return save_path
-        else:
-            print(f"❌ Pollinations failed: HTTP {resp.status_code}, size={len(resp.content)}")
-            return None
+        return save_path
 
     except Exception as e:
-        print(f"❌ Pollinations error: {e}")
+
+        print(f"❌ HuggingFace failed: {e}")
+
         return None
 
 
-# ----------------------------------------------------------
-# MASTER IMAGE GENERATOR
-# Tries all three methods in order, returns path or None
-# ----------------------------------------------------------
+# =========================================================
+# OPENROUTER IMAGE GEN
+# =========================================================
 
-def generate_news_image(headline, category, ai_result, article_index):
-    """
-    Master function: tries OpenRouter → Canva → Pollinations.
-    Returns the saved image path, or None if all fail.
-    """
+def generate_image_openrouter(prompt, save_path):
+
+    if not OPENROUTER_API_KEY:
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    for model in OPENROUTER_IMAGE_MODELS:
+
+        model_id = model["model"]
+
+        print(f"🎨 Trying OpenRouter: {model_id}")
+
+        payload = {
+            "model": model_id,
+
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        }
+
+        try:
+
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=180
+            )
+
+            if response.status_code != 200:
+
+                print(f"❌ OR Error {response.status_code}")
+
+                continue
+
+            data = response.json()
+
+            choices = data.get("choices", [])
+
+            if not choices:
+                continue
+
+            message = choices[0].get("message", {})
+
+            images = message.get("images", [])
+
+            if not images:
+                continue
+
+            image_url = images[0]["image_url"]["url"]
+
+            if image_url.startswith("data:image"):
+
+                image_data = image_url.split(",")[1]
+
+                with open(save_path, "wb") as f:
+                    f.write(base64.b64decode(image_data))
+
+                print(f"✅ OpenRouter image saved")
+
+                return save_path
+
+        except Exception as e:
+
+            print(f"❌ OpenRouter failed: {e}")
+
+    return None
+
+
+# =========================================================
+# CANVA AI
+# =========================================================
+
+def generate_image_canva(prompt, save_path):
+
+    try:
+
+        from canva_ai import generate_news_poster
+
+        print("🎨 Trying Canva AI...")
+
+        result = generate_news_poster(prompt)
+
+        if result and os.path.exists(result):
+
+            with open(result, "rb") as src:
+                data = src.read()
+
+            with open(save_path, "wb") as dst:
+                dst.write(data)
+
+            print(f"✅ Canva image saved")
+
+            return save_path
+
+    except Exception as e:
+
+        print(f"❌ Canva failed: {e}")
+
+    return None
+
+# =========================================================
+# POLLINATIONS AI
+# =========================================================
+
+def generate_image_pollinations(prompt, save_path):
+
+    try:
+
+        print("🎨 Trying Pollinations...")
+
+        encoded = urllib.parse.quote(prompt[:500])
+
+        url = (
+            f"https://image.pollinations.ai/prompt/{encoded}"
+            f"?width=1080"
+            f"&height=1350"
+            f"&model=flux"
+            f"&enhance=true"
+        )
+
+        response = requests.get(url, timeout=180)
+
+        if response.status_code == 200:
+
+            with open(save_path, "wb") as f:
+                f.write(response.content)
+
+            print(f"✅ Pollinations saved")
+
+            return save_path
+
+    except Exception as e:
+
+        print(f"❌ Pollinations failed: {e}")
+
+    return None
+
+
+# =========================================================
+# MASTER IMAGE GENERATOR
+# =========================================================
+
+def generate_news_image(
+
+    headline,
+    category,
+    ai_result,
+    article_index
+
+):
+
     os.makedirs("downloads", exist_ok=True)
+
     save_path = f"downloads/news_{article_index}.png"
 
-    # Build prompt once, reuse for all methods
-    prompt = build_image_prompt(headline, category, ai_result)
+    prompt = build_image_prompt(
+        headline,
+        category,
+        ai_result
+    )
 
-    print(f"\n🖼️  GENERATING IMAGE for article #{article_index}: {headline[:60]}...")
+    print(f"\n🖼️ GENERATING IMAGE #{article_index}")
 
-    # ── METHOD 1: OpenRouter ──
-    result = generate_image_openrouter(prompt, save_path)
+    # =====================================================
+    # PRIORITY 1 — HUGGINGFACE
+    # =====================================================
+
+    result = generate_image_huggingface(
+        prompt,
+        save_path
+    )
+
     if result:
-        print(f"✅ IMAGE READY (OpenRouter): {result}")
         return result
 
-    print("⚠️ OpenRouter failed → trying Canva AI...")
+    # =====================================================
+    # PRIORITY 2 — OPENROUTER
+    # =====================================================
 
-    # ── METHOD 2: Canva ──
-    result = generate_image_canva(prompt, save_path)
+    result = generate_image_openrouter(
+        prompt,
+        save_path
+    )
+
     if result:
-        print(f"✅ IMAGE READY (Canva): {result}")
         return result
 
-    print("⚠️ Canva failed → trying Pollinations.AI...")
+    # =====================================================
+    # PRIORITY 3 — CANVA
+    # =====================================================
 
-    # ── METHOD 3: Pollinations ──
-    result = generate_image_pollinations(prompt, save_path)
+    result = generate_image_canva(
+        prompt,
+        save_path
+    )
+
     if result:
-        print(f"✅ IMAGE READY (Pollinations): {result}")
         return result
 
-    print(f"❌ ALL IMAGE METHODS FAILED for article #{article_index}")
+    # =====================================================
+    # PRIORITY 4 — POLLINATIONS
+    # =====================================================
+
+    result = generate_image_pollinations(
+        prompt,
+        save_path
+    )
+
+    if result:
+        return result
+
+    print("❌ ALL IMAGE METHODS FAILED")
+
     return None
 
 # =========================================================
