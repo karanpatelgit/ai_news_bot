@@ -12,6 +12,7 @@ import re
 import requests
 import json
 import threading
+import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from difflib import SequenceMatcher
@@ -143,6 +144,35 @@ OPENROUTER_MODELS = [
 ]
 
 # =========================================================
+# OPENROUTER IMAGE GENERATION MODELS (ordered by quality)
+# Primary: Gemini Flash Image (best quality, low cost)
+# Fallback chain: flux-schnell free → flux-dev free
+# =========================================================
+
+OPENROUTER_IMAGE_MODELS = [
+    {
+        "model":      "google/gemini-2.5-flash-image",
+        "modalities": ["image", "text"],
+        "label":      "Gemini 2.5 Flash Image"
+    },
+    {
+        "model":      "google/gemini-2.5-flash-image-preview:free",
+        "modalities": ["image", "text"],
+        "label":      "Gemini 2.5 Flash Image (Free Preview)"
+    },
+    {
+        "model":      "black-forest-labs/flux-schnell:free",
+        "modalities": ["image"],
+        "label":      "FLUX Schnell (Free)"
+    },
+    {
+        "model":      "black-forest-labs/flux-1-schnell",
+        "modalities": ["image"],
+        "label":      "FLUX 1 Schnell"
+    },
+]
+
+# =========================================================
 # DUPLICATE DETECTION
 # =========================================================
 
@@ -223,214 +253,301 @@ def send_telegram_photo(photo_path, caption):
             print(f"❌ TELEGRAM PHOTO ERROR ({chat_id}):", e)
 
 # =========================================================
-# SEND ARTICLE WITH INLINE ✅ GENERATE IMAGE BUTTON  ← NEW
+# ██████████████████████████████████████████████████████
+# IMAGE GENERATION PIPELINE
+# Priority 1 → OpenRouter (Gemini / FLUX)
+# Priority 2 → Canva AI (Playwright headless fallback)
+# Priority 3 → Pollinations.AI (last resort, free)
+# ██████████████████████████████████████████████████████
 # =========================================================
 
-def send_article_with_button(chat_id, article_index, message_text):
+def build_image_prompt(headline, category, ai_result):
+    """
+    Builds a vivid, detailed image generation prompt
+    for an Indian breaking news poster.
+    """
+    summary_snip = ai_result[:300] if ai_result else headline
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    prompt = f"""Create an ultra realistic Indian breaking news Instagram poster.
 
-    keyboard = {
-        "inline_keyboard": [[
-            {
-                "text": "🖼️ Generate Canva Image",
-                "callback_data": f"canva_{article_index}"
-            }
-        ]]
+NEWS HEADLINE: {headline}
+CATEGORY: {category}
+SUMMARY: {summary_snip}
+
+VISUAL STYLE INSTRUCTIONS:
+- Ultra realistic professional Indian news media graphic
+- Cinematic newsroom style with dramatic lighting
+- Viral social media breaking news aesthetic
+- Add realistic environment matching the news context:
+  * Crime news → police, sirens, tension scene
+  * Politics → politicians, crowd, parliament style
+  * Flood/disaster → realistic disaster scene
+  * International → geopolitical newsroom graphics
+- Hindi news channel visual quality
+- Strong emotional storytelling
+- Bold headline composition area
+- Red + black + yellow Indian news color palette
+- High contrast, sharp details, studio quality
+- Realistic Indian atmosphere and humans
+- Mobile friendly portrait composition
+- Modern breaking news design
+- NO watermarks
+- Instagram optimized 4:5 portrait format"""
+
+    return prompt
+
+
+# ----------------------------------------------------------
+# METHOD 1 — OpenRouter Image Generation
+# Uses /api/v1/chat/completions with modalities=["image"]
+# Returns saved file path or None
+# ----------------------------------------------------------
+
+def generate_image_openrouter(prompt, save_path):
+    """
+    Tries each OpenRouter image model in sequence.
+    Returns save_path on success, None on total failure.
+    """
+    if not OPENROUTER_API_KEY:
+        print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter image gen")
+        return None
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type":  "application/json",
+        "HTTP-Referer":  "https://github.com/karanpatelgit/ai_news_bot",
+        "X-Title":       "News Hunter Bot"
     }
 
-    # Split long messages — Telegram max is 4096 chars
-    chunk_size = 3800
-    chunks     = [message_text[i:i+chunk_size] for i in range(0, len(message_text), chunk_size)]
+    for model_info in OPENROUTER_IMAGE_MODELS:
 
-    for i, chunk in enumerate(chunks):
+        model_id   = model_info["model"]
+        modalities = model_info["modalities"]
+        label      = model_info["label"]
+
+        print(f"🎨 Trying OpenRouter image model: {label} ({model_id})")
+
         payload = {
-            "chat_id": chat_id,
-            "text": chunk,
-        }
-        # Only attach button to the LAST chunk so it appears at the bottom
-        if i == len(chunks) - 1:
-            payload["reply_markup"] = json.dumps(keyboard)
-
-        try:
-            requests.post(url, data=payload, timeout=30)
-            print(f"✅ ARTICLE #{article_index} CHUNK {i+1} SENT WITH BUTTON -> {chat_id}")
-        except Exception as e:
-            print(f"❌ SEND WITH BUTTON ERROR: {e}")
-
-# =========================================================
-# ANSWER CALLBACK QUERY (removes Telegram spinner)  ← NEW
-# =========================================================
-
-def answer_callback(callback_query_id, text=""):
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",
-            data={"callback_query_id": callback_query_id, "text": text},
-            timeout=10
-        )
-    except Exception as e:
-        print("❌ ANSWER CALLBACK ERROR:", e)
-
-# =========================================================
-# IN-MEMORY ARTICLE STORE  ← NEW
-# Holds finished articles so button clicks can retrieve them
-# { article_index: { headline, category, link, ai_result, ... } }
-# =========================================================
-
-article_store = {}
-
-# =========================================================
-# CANVA IMAGE GENERATOR (called on button click only)  ← NEW
-# =========================================================
-
-def generate_and_send_canva_image(article_index):
-
-    from canva_ai import generate_news_poster
-
-    article = article_store.get(article_index)
-
-    if not article:
-        send_telegram_message(f"❌ Article #{article_index} not found in memory.")
-        return
-
-    headline  = article["headline"]
-    category  = article["category"]
-    link      = article["link"]
-    ai_result = article["ai_result"]
-    score     = article["final_score"]
-
-    # Tell user we're starting
-    send_telegram_message(
-        f"⏳ Generating Canva image for article #{article_index}...\n\n"
-        f"📰 {headline}\n\n"
-        f"This may take ~2 minutes. Please wait! 🙏"
-    )
-
-    visual_prompt = f"""
-Breaking Indian news poster.
-
-Headline:
-{headline}
-
-Category:
-{category}
-
-News Summary:
-{ai_result[:500]}
-
-Style:
-Ultra realistic
-Hindi breaking news
-Indian newsroom
-Cinematic lighting
-Viral Instagram post
-Red and black theme
-1080x1350 portrait
-"""
-
-    try:
-
-        print(f"🎨 GENERATING CANVA POSTER FOR ARTICLE #{article_index}...")
-
-        image_path = generate_news_poster(visual_prompt)
-
-        if image_path and os.path.exists(image_path):
-
-            caption = (
-                f"🖼️ Canva AI Poster — Article #{article_index}\n\n"
-                f"📰 {headline}\n"
-                f"📂 {category}\n"
-                f"📈 Viral Score: {score}\n"
-                f"🔗 {link}\n\n"
-                f"Follow us on:\n"
-                f"📸 Instagram: https://www.instagram.com/karan_patel_kushinagar\n"
-                f"▶️ YouTube: https://youtube.com/@karan_patel_kushinagar\n"
-                f"📘 Facebook: https://www.facebook.com/share/1D627R2qFV/"
-            )
-
-            send_telegram_photo(image_path, caption)
-
-            print(f"✅ CANVA IMAGE SENT FOR ARTICLE #{article_index}")
-
-        else:
-
-            send_telegram_message(
-                f"❌ Image generation failed for article #{article_index}. Please try again."
-            )
-
-    except Exception as e:
-
-        print(f"❌ CANVA ERROR for article #{article_index}: {e}")
-
-        send_telegram_message(
-            f"❌ Canva error for article #{article_index}: {str(e)[:200]}"
-        )
-
-# =========================================================
-# TELEGRAM BUTTON CLICK LISTENER  ← NEW
-# Polls Telegram for button taps and triggers Canva
-# =========================================================
-
-def listen_for_button_clicks(stop_event, timeout_minutes=30):
-
-    print(f"\n========== LISTENING FOR BUTTON CLICKS ({timeout_minutes} min) ==========")
-    print("Tap 🖼️ Generate Canva Image on any article in Telegram.")
-    print("Listening will auto-stop after timeout.\n")
-
-    last_update_id = None
-    deadline       = time.time() + (timeout_minutes * 60)
-
-    while not stop_event.is_set() and time.time() < deadline:
-
-        try:
-
-            url    = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-            params = {
-                "timeout": 10,
-                "allowed_updates": ["callback_query"]
+            "model":      model_id,
+            "modalities": modalities,
+            "messages": [
+                {
+                    "role":    "user",
+                    "content": prompt
+                }
+            ],
+            # portrait 4:5 ratio for Instagram
+            "image_config": {
+                "aspect_ratio": "4:5"
             }
+        }
 
-            if last_update_id:
-                params["offset"] = last_update_id + 1
+        try:
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=120
+            )
 
-            r       = requests.get(url, params=params, timeout=20)
-            updates = r.json().get("result", [])
+            if resp.status_code != 200:
+                print(f"❌ OpenRouter image HTTP {resp.status_code} for {label}: {resp.text[:200]}")
+                continue
 
-            for update in updates:
+            data = resp.json()
 
-                last_update_id = update["update_id"]
-                cb             = update.get("callback_query")
+            # OpenRouter returns images in choices[0].message.images
+            choices = data.get("choices", [])
+            if not choices:
+                print(f"⚠️ No choices in OpenRouter image response for {label}")
+                continue
 
-                if cb:
+            message = choices[0].get("message", {})
+            images  = message.get("images", [])
 
-                    data  = cb.get("data", "")
-                    cb_id = cb["id"]
+            if not images:
+                # Some models return base64 inside content instead
+                content = message.get("content", "")
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "image_url":
+                            image_url = block.get("image_url", {}).get("url", "")
+                            if image_url.startswith("data:image"):
+                                b64_data = image_url.split(",", 1)[1]
+                                with open(save_path, "wb") as f:
+                                    f.write(base64.b64decode(b64_data))
+                                print(f"✅ OpenRouter image saved (content block): {save_path}")
+                                return save_path
+                print(f"⚠️ No images field in OpenRouter response for {label}")
+                continue
 
-                    if data.startswith("canva_"):
+            # Extract first image
+            img_obj   = images[0]
+            image_url = img_obj.get("image_url", {}).get("url", "")
 
-                        article_index = int(data.split("_")[1])
+            if not image_url:
+                print(f"⚠️ Empty image URL from {label}")
+                continue
 
-                        print(f"\n✅ Button clicked! Article #{article_index} selected for Canva.")
+            if image_url.startswith("data:image"):
+                # base64 data URL
+                b64_data = image_url.split(",", 1)[1]
+                with open(save_path, "wb") as f:
+                    f.write(base64.b64decode(b64_data))
+                print(f"✅ OpenRouter image saved (base64): {save_path}")
+                return save_path
 
-                        answer_callback(cb_id, "🖼️ Generating image... please wait!")
+            elif image_url.startswith("http"):
+                # Remote URL — download it
+                img_resp = requests.get(image_url, timeout=60)
+                if img_resp.status_code == 200:
+                    with open(save_path, "wb") as f:
+                        f.write(img_resp.content)
+                    print(f"✅ OpenRouter image downloaded and saved: {save_path}")
+                    return save_path
+                else:
+                    print(f"❌ Failed to download image from URL: {img_resp.status_code}")
+                    continue
 
-                        # Run Canva in background thread so listener keeps working
-                        t = threading.Thread(
-                            target=generate_and_send_canva_image,
-                            args=(article_index,),
-                            daemon=True
-                        )
-                        t.start()
+            else:
+                print(f"⚠️ Unrecognized image URL format from {label}: {image_url[:60]}")
+                continue
 
         except Exception as e:
+            print(f"❌ OpenRouter image error for {label}: {e}")
+            continue
 
-            print("LISTENER ERROR:", e)
-            time.sleep(5)
+    print("❌ All OpenRouter image models failed")
+    return None
 
-        time.sleep(1)
 
-    print("\n⏹️ Listener stopped.")
+# ----------------------------------------------------------
+# METHOD 2 — Canva AI (Playwright headless fallback)
+# Wraps your existing canva_ai.py generate_news_poster()
+# Returns saved file path or None
+# ----------------------------------------------------------
+
+def generate_image_canva(prompt, save_path):
+    """
+    Falls back to Canva AI via Playwright.
+    Only works if canva_ai.py is present and CANVA_EMAIL/PASSWORD are set.
+    """
+    if not CANVA_EMAIL or not CANVA_PASSWORD:
+        print("⚠️ Canva credentials not set — skipping Canva fallback")
+        return None
+
+    try:
+        from canva_ai import generate_news_poster
+        print("🎨 Trying Canva AI fallback...")
+
+        result_path = generate_news_poster(prompt)
+
+        if result_path and os.path.exists(result_path):
+            # Copy to our desired save_path
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(result_path, "rb") as src, open(save_path, "wb") as dst:
+                dst.write(src.read())
+            print(f"✅ Canva image saved: {save_path}")
+            return save_path
+        else:
+            print("❌ Canva returned no image")
+            return None
+
+    except ImportError:
+        print("⚠️ canva_ai.py not found — skipping Canva fallback")
+        return None
+    except Exception as e:
+        print(f"❌ Canva fallback error: {e}")
+        return None
+
+
+# ----------------------------------------------------------
+# METHOD 3 — Pollinations.AI (last resort, always free)
+# Simple GET request, no API key needed
+# Returns saved file path or None
+# ----------------------------------------------------------
+
+def generate_image_pollinations(prompt, save_path):
+    """
+    Last-resort free image generation via Pollinations.AI.
+    No API key required. Quality is lower but always works.
+    """
+    try:
+        print("🎨 Trying Pollinations.AI (last resort)...")
+
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+        # Encode prompt for URL
+        import urllib.parse
+        encoded_prompt = urllib.parse.quote(prompt[:500])
+
+        # Pollinations supports width/height params
+        # 864x1080 ≈ 4:5 portrait for Instagram
+        poll_url = (
+            f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+            f"?width=864&height=1080&model=flux&nologo=true&enhance=true"
+        )
+
+        resp = requests.get(poll_url, timeout=120)
+
+        if resp.status_code == 200 and len(resp.content) > 5000:
+            with open(save_path, "wb") as f:
+                f.write(resp.content)
+            print(f"✅ Pollinations image saved: {save_path}")
+            return save_path
+        else:
+            print(f"❌ Pollinations failed: HTTP {resp.status_code}, size={len(resp.content)}")
+            return None
+
+    except Exception as e:
+        print(f"❌ Pollinations error: {e}")
+        return None
+
+
+# ----------------------------------------------------------
+# MASTER IMAGE GENERATOR
+# Tries all three methods in order, returns path or None
+# ----------------------------------------------------------
+
+def generate_news_image(headline, category, ai_result, article_index):
+    """
+    Master function: tries OpenRouter → Canva → Pollinations.
+    Returns the saved image path, or None if all fail.
+    """
+    os.makedirs("downloads", exist_ok=True)
+    save_path = f"downloads/news_{article_index}.png"
+
+    # Build prompt once, reuse for all methods
+    prompt = build_image_prompt(headline, category, ai_result)
+
+    print(f"\n🖼️  GENERATING IMAGE for article #{article_index}: {headline[:60]}...")
+
+    # ── METHOD 1: OpenRouter ──
+    result = generate_image_openrouter(prompt, save_path)
+    if result:
+        print(f"✅ IMAGE READY (OpenRouter): {result}")
+        return result
+
+    print("⚠️ OpenRouter failed → trying Canva AI...")
+
+    # ── METHOD 2: Canva ──
+    result = generate_image_canva(prompt, save_path)
+    if result:
+        print(f"✅ IMAGE READY (Canva): {result}")
+        return result
+
+    print("⚠️ Canva failed → trying Pollinations.AI...")
+
+    # ── METHOD 3: Pollinations ──
+    result = generate_image_pollinations(prompt, save_path)
+    if result:
+        print(f"✅ IMAGE READY (Pollinations): {result}")
+        return result
+
+    print(f"❌ ALL IMAGE METHODS FAILED for article #{article_index}")
+    return None
 
 # =========================================================
 # URL HELPERS
@@ -1104,7 +1221,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     headers={
                         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                         "Content-Type": "application/json",
-                        "HTTP-Referer": "https://github.com/",
+                        "HTTP-Referer": "https://github.com/karanpatelgit/ai_news_bot",
                         "X-Title": "News Hunter Bot Matrix"
                     },
                     json={
@@ -1357,7 +1474,7 @@ EMOTIONAL_WORDS = [
 # =========================================================
 
 results      = []
-article_idx  = 0   # counter for article_store keys
+article_idx  = 0
 
 HYPER_LOCAL_SCRAPER_KEYS = {
     k for k in LOCAL_SCRAPERS
@@ -1507,10 +1624,28 @@ Source Link: {link}
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
-        print(f"🚀 FINAL SCORE PASSED ({final_score}) — SENDING TELEGRAM")
+        print(f"🚀 FINAL SCORE PASSED ({final_score}) — GENERATING IMAGE + SENDING TELEGRAM")
 
         cleaned_link = clean_url(link)
         short_link   = shorten_url(cleaned_link)
+
+        article_idx += 1
+
+        # =================================================
+        # AUTO IMAGE GENERATION
+        # OpenRouter → Canva → Pollinations
+        # =================================================
+
+        image_path = generate_news_image(
+            headline=headline,
+            category=category,
+            ai_result=ai_result,
+            article_index=article_idx
+        )
+
+        # =================================================
+        # BUILD TELEGRAM MESSAGE
+        # =================================================
 
         telegram_message = f"""
 🔥 VIRAL NEWS
@@ -1534,38 +1669,38 @@ Follow us on:
 📘 Facebook: https://www.facebook.com/share/1D627R2qFV/
 """
 
-        # =====================================================
-        # STORE ARTICLE IN MEMORY FOR BUTTON CLICK  ← NEW
-        # =====================================================
+        # =================================================
+        # SEND TO TELEGRAM
+        # If image generated → send as photo with caption
+        # If image failed   → send as text message
+        # =================================================
 
-        article_idx += 1
+        if image_path and os.path.exists(image_path):
 
-        article_store[article_idx] = {
-            "headline":      headline,
-            "category":      category,
-            "link":          short_link,
-            "emotion_score": emotion_score,
-            "virality_score":virality_score,
-            "toxicity_score":toxicity_score,
-            "trending_score":trending_score,
-            "final_score":   final_score,
-            "ai_result":     ai_result,
-            "source":        source,
-        }
+            # Send image with full article as caption
+            # Telegram caption limit is 1024 chars so send article as separate message
+            photo_caption = (
+                f"🖼️ AI News Poster — Article #{article_idx}\n\n"
+                f"📰 {headline}\n"
+                f"📂 {category}\n"
+                f"📈 Viral Score: {final_score}\n"
+                f"🔗 {short_link}\n\n"
+                f"📸 Instagram: https://www.instagram.com/karan_patel_kushinagar\n"
+                f"▶️ YouTube: https://youtube.com/@karan_patel_kushinagar\n"
+                f"📘 Facebook: https://www.facebook.com/share/1D627R2qFV/"
+            )
 
-        # =====================================================
-        # SEND TO ALL CHAT IDs WITH 🖼️ GENERATE IMAGE BUTTON
-        # ← NEW: replaces the old send_telegram_message call
-        # =====================================================
+            send_telegram_photo(image_path, photo_caption)
+            print(f"✅ IMAGE SENT for article #{article_idx}")
 
-        chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
-        if not chat_ids and CHAT_ID:
-            chat_ids = [CHAT_ID]
+            # Then send full article text separately
+            send_telegram_message(telegram_message)
+            print(f"✅ ARTICLE TEXT SENT for article #{article_idx}")
 
-        for cid in chat_ids:
-            send_article_with_button(cid, article_idx, telegram_message)
-
-        print(f"✅ ARTICLE #{article_idx} SENT TO TELEGRAM WITH BUTTON")
+        else:
+            # No image — just send text
+            send_telegram_message(telegram_message)
+            print(f"✅ ARTICLE (TEXT ONLY, image failed) SENT for article #{article_idx}")
 
         results.append({
             "source":         source,
@@ -1578,7 +1713,8 @@ Follow us on:
             "toxicity_score": toxicity_score,
             "trending_score": trending_score,
             "final_score":    final_score,
-            "ai_result":      ai_result
+            "ai_result":      ai_result,
+            "image_generated": bool(image_path and os.path.exists(image_path))
         })
 
         time.sleep(TELEGRAM_SLEEP_TIME)
@@ -1599,21 +1735,7 @@ if not results_df.empty:
     results_df.to_csv(csv_path, index=False)
     print(f"\n✅ CSV SAVED: {csv_path}")
     print(f"✅ TOTAL SENT: {len(results_df)}")
+    images_ok = results_df["image_generated"].sum() if "image_generated" in results_df.columns else 0
+    print(f"🖼️  IMAGES GENERATED: {images_ok}/{len(results_df)}")
 else:
     print("\n❌ NO HIGH VIRAL NEWS FOUND")
-
-# =========================================================
-# START LISTENING FOR 🖼️ BUTTON CLICKS  ← NEW
-# Waits 30 minutes for you to tap buttons in Telegram
-# =========================================================
-
-if article_store:
-    print(f"\n✅ {len(article_store)} articles sent. Waiting for your image button taps...")
-    stop_event = threading.Event()
-    try:
-        listen_for_button_clicks(stop_event, timeout_minutes=30)
-    except KeyboardInterrupt:
-        print("\n🛑 Stopped. Goodbye!")
-        stop_event.set()
-else:
-    print("\n❌ No articles passed scoring — nothing to listen for.")
