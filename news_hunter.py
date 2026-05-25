@@ -771,7 +771,7 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
     return results
 
 # =========================================================
-# RSS FEEDS
+# RSS 
 # =========================================================
 
 RSS_FEEDS = {
@@ -803,12 +803,7 @@ RSS_FEEDS = {
         "https://news.google.com/rss/search?q=उत्तर+प्रदेश&hl=hi-IN&gl=IN&ceid=IN:hi",
     "GNews_Purvanchal_HI":
         "https://news.google.com/rss/search?q=पूर्वांचल&hl=hi-IN&gl=IN&ceid=IN:hi",
-    "GNews_YogiUP":
-        "https://news.google.com/rss/search?q=yogi+uttar+pradesh&hl=en-IN&gl=IN&ceid=IN:en",
-    "GNews_UPCrime":
-        "https://news.google.com/rss/search?q=UP+crime+uttar+pradesh&hl=en-IN&gl=IN&ceid=IN:en",
-    "GNews_UPPolice":
-        "https://news.google.com/rss/search?q=UP+police+arrest+encounter&hl=en-IN&gl=IN&ceid=IN:en",
+    
     "India":
         "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
     "India Politics":
@@ -839,62 +834,16 @@ RSS_FEEDS = {
         "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
     "Modi":
         "https://news.google.com/rss/search?q=narendra+modi&hl=en-IN&gl=IN&ceid=IN:en",
-    "NEET_Exam":
-        "https://news.google.com/rss/search?q=NEET+exam+india&hl=en-IN&gl=IN&ceid=IN:en",
     "India_Weather":
         "https://news.google.com/rss/search?q=india+weather+flood+rain&hl=en-IN&gl=IN&ceid=IN:en",
-    "AmarUjala_National":   "https://www.amarujala.com/rss/india-news.xml",
+    
     "AmarUjala_UP_RSS":     "https://www.amarujala.com/rss/uttar-pradesh.xml",
-    "AmarUjala_Crime_RSS":  "https://www.amarujala.com/rss/crime.xml",
-    "AmarUjala_Politics":   "https://www.amarujala.com/rss/politics.xml",
-    "AmarUjala_World":      "https://www.amarujala.com/rss/world.xml",
-    "AmarUjala_Business":   "https://www.amarujala.com/rss/business.xml",
-    "AmarUjala_Sports":     "https://www.amarujala.com/rss/sports.xml",
-    "AmarUjala_Entertainment": "https://www.amarujala.com/rss/entertainment.xml",
-    "AmarUjala_Tech":       "https://www.amarujala.com/rss/technology.xml",
-    "Jagran_National":      "https://www.jagran.com/rss/news-national.xml",
     "Jagran_UP_RSS":        "https://www.jagran.com/rss/news-uttar-pradesh.xml",
-    "Jagran_World":         "https://www.jagran.com/rss/news-world.xml",
-    "Jagran_Crime":         "https://www.jagran.com/rss/news-crime.xml",
-    "Jagran_Business":      "https://www.jagran.com/rss/news-business.xml",
-    "Jagran_Sports":        "https://www.jagran.com/rss/news-sports.xml",
-    "Jagran_Entertainment": "https://www.jagran.com/rss/news-entertainment.xml",
-    "Jagran_Tech":          "https://www.jagran.com/rss/news-technology.xml",
-    "Hindustan_National":   "https://feed.livehindustan.com/rss/3127",
     "Hindustan_UP_RSS":     "https://feed.livehindustan.com/rss/3130",
-    "Hindustan_World":      "https://feed.livehindustan.com/rss/3128",
-    "Hindustan_Crime":      "https://feed.livehindustan.com/rss/3131",
-    "Hindustan_Sports":     "https://feed.livehindustan.com/rss/3133",
-    "Hindustan_Entertainment": "https://feed.livehindustan.com/rss/3132",
-    "Hindustan_Business":   "https://feed.livehindustan.com/rss/3134",
-    "Bhaskar_National":     "https://www.bhaskar.com/rss-feed/1061/",
     "Bhaskar_UP_RSS":       "https://www.bhaskar.com/rss-feed/1063/",
-    "Bhaskar_World":        "https://www.bhaskar.com/rss-feed/1065/",
-    "Bhaskar_Crime":        "https://www.bhaskar.com/rss-feed/1068/",
-    "Bhaskar_Sports":       "https://www.bhaskar.com/rss-feed/1071/",
-    "Bhaskar_Business":     "https://www.bhaskar.com/rss-feed/1064/",
-    "Bhaskar_Entertainment":"https://www.bhaskar.com/rss-feed/1072/",
-    "NDTV_India":           "https://feeds.feedburner.com/ndtvkhabar-samachar",
-    "NDTV_World":           "https://feeds.feedburner.com/ndtvkhabar-duniya",
-    "NDTV_Crime":           "https://feeds.feedburner.com/ndtvkhabar-crime",
-    "NDTV_Politics":        "https://feeds.feedburner.com/ndtvkhabar-politics",
-    "NDTV_Business":        "https://feeds.feedburner.com/ndtvkhabar-business",
-    "NDTV_Sports":          "https://feeds.feedburner.com/ndtvkhabar-sports",
-    "ABP_National":         "https://www.abplive.com/feed",
     "ABP_UP_RSS":           "https://www.abplive.com/states/up-uk/feed",
-    "Patrika_National":     "https://api.patrika.com/rss/india-news",
     "Patrika_UP_RSS":       "https://api.patrika.com/rss/uttar-pradesh-news",
-    "Patrika_Crime":        "https://api.patrika.com/rss/crime-news",
-    "Patrika_World":        "https://api.patrika.com/rss/world-news",
-    "Patrika_Business":     "https://api.patrika.com/rss/business-news",
-    "News18_Hindi_National":"https://hindi.news18.com/rss/khabar/india.xml",
     "News18_Hindi_UP_RSS":  "https://hindi.news18.com/rss/khabar/uttar-pradesh.xml",
-    "News18_Hindi_Crime":   "https://hindi.news18.com/rss/khabar/crime.xml",
-    "News18_Hindi_Politics":"https://hindi.news18.com/rss/khabar/politics-and-nation.xml",
-    "News18_Hindi_World":   "https://hindi.news18.com/rss/khabar/world.xml",
-    "News18_Hindi_Business":"https://hindi.news18.com/rss/khabar/business.xml",
-    "News18_Hindi_Sports":  "https://hindi.news18.com/rss/khabar/sports.xml",
-    "News18_Hindi_Ent":     "https://hindi.news18.com/rss/khabar/entertainment.xml",
     "Reuters World":        "https://feeds.reuters.com/Reuters/worldNews",
     "BBC World":            "http://feeds.bbci.co.uk/news/world/rss.xml",
     "BBC India":            "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml",
@@ -903,8 +852,6 @@ RSS_FEEDS = {
     "Reddit WorldNews":     "https://www.reddit.com/r/worldnews/.rss",
     "Reddit Geopolitics":   "https://www.reddit.com/r/geopolitics/.rss",
     "GaonConnection_RSS":   "https://www.gaonconnection.com/feed",
-    "KrishiJagran_RSS":     "https://hindi.krishijagran.com/feed",
-    "SarkariExam_RSS":      "https://www.sarkariresult.com/feed/",
 }
 
 # =========================================================
@@ -918,53 +865,39 @@ LOCAL_SCRAPERS = {
     "AmarUjala_Maharajganj":"https://www.amarujala.com/uttar-pradesh/maharajganj",
     "AmarUjala_Basti":      "https://www.amarujala.com/uttar-pradesh/basti",
     "AmarUjala_UP":         "https://www.amarujala.com/uttar-pradesh",
-    "AmarUjala_Crime":      "https://www.amarujala.com/crime",
-    "AmarUjala_National":   "https://www.amarujala.com/india-news",
     "Bhaskar_Kushinagar":   "https://www.bhaskar.com/local/uttar-pradesh/kushinagar/",
     "Bhaskar_Gorakhpur":    "https://www.bhaskar.com/local/uttar-pradesh/gorakhpur/",
     "Bhaskar_Deoria":       "https://www.bhaskar.com/local/uttar-pradesh/deoria/",
     "Bhaskar_Maharajganj":  "https://www.bhaskar.com/local/uttar-pradesh/maharajganj/",
     "Bhaskar_Basti":        "https://www.bhaskar.com/local/uttar-pradesh/basti/",
     "Bhaskar_UP":           "https://www.bhaskar.com/local/uttar-pradesh/",
-    "Bhaskar_Crime":        "https://www.bhaskar.com/crime/",
-    "Bhaskar_National":     "https://www.bhaskar.com/national/",
     "Hindustan_Kushinagar": "https://www.livehindustan.com/uttar-pradesh/kushinagar",
     "Hindustan_Gorakhpur":  "https://www.livehindustan.com/uttar-pradesh/gorakhpur",
     "Hindustan_Deoria":     "https://www.livehindustan.com/uttar-pradesh/deoria",
     "Hindustan_Maharajganj":"https://www.livehindustan.com/uttar-pradesh/maharajganj",
     "Hindustan_Basti":      "https://www.livehindustan.com/uttar-pradesh/basti",
     "Hindustan_UP":         "https://www.livehindustan.com/uttar-pradesh",
-    "Hindustan_Crime":      "https://www.livehindustan.com/crime",
     "Jagran_Gorakhpur":     "https://www.jagran.com/uttar-pradesh/gorakhpur-city-news-hindi.html",
     "Jagran_Kushinagar":    "https://www.jagran.com/uttar-pradesh/kushinagar-news-hindi.html",
     "Jagran_Deoria":        "https://www.jagran.com/uttar-pradesh/deoria-news-hindi.html",
     "Jagran_Maharajganj":   "https://www.jagran.com/uttar-pradesh/maharajganj-news-hindi.html",
     "Jagran_Basti":         "https://www.jagran.com/uttar-pradesh/basti-news-hindi.html",
     "Jagran_UP":            "https://www.jagran.com/uttar-pradesh/",
-    "Jagran_Crime":         "https://www.jagran.com/crime/",
-    "Jagran_National":      "https://www.jagran.com/news/national.html",
     "Patrika_Gorakhpur":    "https://www.patrika.com/gorakhpur-news/",
     "Patrika_Deoria":       "https://www.patrika.com/deoria-news/",
     "Patrika_UP":           "https://www.patrika.com/uttar-pradesh-news/",
-    "Patrika_Crime":        "https://www.patrika.com/crime/",
-    "Patrika_National":     "https://www.patrika.com/national-news/",
     "News18_UP":            "https://hindi.news18.com/uttar-pradesh/",
     "News18_Gorakhpur":     "https://hindi.news18.com/news/uttar-pradesh/gorakhpur/",
     "News18_Kushinagar":    "https://hindi.news18.com/news/uttar-pradesh/kushinagar/",
-    "News18_Crime":         "https://hindi.news18.com/crime/",
-    "News18_National":      "https://hindi.news18.com/india/",
     "ETVBharat_UP":         "https://www.etvbharat.com/hindi/uttar-pradesh",
     "ETVBharat_Gorakhpur":  "https://www.etvbharat.com/hindi/uttar-pradesh/state/gorakhpur",
     "ETVBharat_Kushinagar": "https://www.etvbharat.com/hindi/uttar-pradesh/state/kushinagar",
-    "ETVBharat_Crime":      "https://www.etvbharat.com/hindi/crime",
     "ZeeUPUK":              "https://zeenews.india.com/hindi/india/up-uttarakhand",
     "ZeeUP":                "https://zeenews.india.com/hindi/tags/uttar-pradesh-news.html",
     "ZeeGorakhpur":         "https://zeenews.india.com/hindi/tags/gorakhpur-news.html",
-    "ZeeCrime":             "https://zeenews.india.com/hindi/crime",
     "TV9_UP":               "https://www.tv9hindi.com/state/uttar-pradesh",
     "TV9_Gorakhpur":        "https://www.tv9hindi.com/tag/gorakhpur",
     "TV9_Kushinagar":       "https://www.tv9hindi.com/tag/kushinagar",
-    "TV9_Crime":            "https://www.tv9hindi.com/crime",
     "AajTak_UP":            "https://www.aajtak.in/uttar-pradesh",
     "AajTak_Gorakhpur":     "https://www.aajtak.in/topic/gorakhpur",
     "AajTak_Kushinagar":    "https://www.aajtak.in/topic/kushinagar",
@@ -975,24 +908,14 @@ LOCAL_SCRAPERS = {
     "IndiaTV_UP":           "https://www.indiatv.in/uttar-pradesh",
     "IndiaTV_Gorakhpur":    "https://www.indiatv.in/topic/gorakhpur",
     "IndiaTV_Kushinagar":   "https://www.indiatv.in/topic/kushinagar",
-    "OneIndia_UP":          "https://hindi.oneindia.com/news/uttar-pradesh/",
-    "OneIndia_Gorakhpur":   "https://hindi.oneindia.com/topic/gorakhpur/",
     "Webdunia_UP":          "https://hindi.webdunia.com/regional-hindi-news/uttar-pradesh/",
     "GorakhpurLive":        "https://gorakhpurlive.com/",
     "PurvanchalNews":       "https://purvanchalnews.com/",
     "UPTak":                "https://www.uptak.in/",
-    "GaonConnection":       "https://www.gaonconnection.com/",
     "JanSatta_UP":          "https://www.jansatta.com/national/uttar-pradesh/",
     "UPPolice":             "https://uppolice.gov.in/",
     "PIB_UP":               "https://pib.gov.in/statewise.aspx?state=U",
     "IMD":                  "https://mausam.imd.gov.in/",
-    "FloodAlerts":          "https://cwc.gov.in/flood-forecast-monitoring",
-    "SarkariResult":        "https://www.sarkariresult.com/",
-    "UPPSC":                "https://uppsc.up.nic.in/",
-    "UPBoard":              "https://upmsp.edu.in/",
-    "KrishiJagran":         "https://www.krishijagran.com/",
-    "GaonConn_Agri":        "https://www.gaonconnection.com/kheti-kisani",
-    "NHM_UP":               "https://upnrhm.gov.in/",
     "HealthDeptUP":         "http://up-health.in/",
 }
 
@@ -1569,12 +1492,12 @@ for row in filtered_news:
 
     prompt = f"""
 You are an elite viral news content writer, Facebook monetization strategist, and social media journalist in Hindi Language.
-Create a high-engagement, monetization-focused Hindi social media article optimized for social networks.
+Create a high-engagement, monetization-focused Hindi social media article optimized for social networks.Sentence repeatition is strictly prohibited.
 
 Structure the output as follows:
 Viral headline: Emotional, curiosity-based, Opening hook (2–3 lines) with Grabs attention.
 Main article (300–400 words): Short paragraphs explaining the event details.
-Key highlights: 3–5 important bullet points other than main article.
+Key highlights: 3–5 important bullet points in other words than main article.
 Public reaction(2-4): Summary of internet viewpoints(2-3 sentence) and Open-ended questions(2-3 question).
 Call to action: Direct users to social handles named "karan_patel_kushinagar".
 
