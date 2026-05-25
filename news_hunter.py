@@ -939,163 +939,163 @@ Political Toxicity: 0/10
 # Sent as a SEPARATE Telegram message chunk after the article.
 # =========================================================
 
-def generate_image_prompt(
-    headline: str,
-    category: str,
-    article_text: str,
-    final_score: float,
-    emotion_score: int,
-    short_link: str,
-) -> str:
-    """
-    Uses the AI cascade to write a detailed image-generation prompt.
-    Returns the raw prompt string (not an image).
-    """
+# def generate_image_prompt(
+#     headline: str,
+#     category: str,
+#     article_text: str,
+#     final_score: float,
+#     emotion_score: int,
+#     short_link: str,
+# ) -> str:
+#     """
+#     Uses the AI cascade to write a detailed image-generation prompt.
+#     Returns the raw prompt string (not an image).
+#     """
 
-    # ── Extract a 1–2 sentence news summary for the prompt ──────────────
-    clean_text = re.sub(r'\s+', ' ', article_text or headline).strip()
-    sentences  = re.split(r'(?<=[.!?।])\s+', clean_text)
-    summary_for_prompt = " ".join(sentences[:2])[:300]
+#     # ── Extract a 1–2 sentence news summary for the prompt ──────────────
+#     clean_text = re.sub(r'\s+', ' ', article_text or headline).strip()
+#     sentences  = re.split(r'(?<=[.!?।])\s+', clean_text)
+#     summary_for_prompt = " ".join(sentences[:2])[:300]
 
-    # ── Decide mood / colour palette based on category ──────────────────
-    mood_map = {
-        "Crime":         ("dark red warning atmosphere, crime scene yellow tape",         "crimson and dark red"),
-        "Breaking":      ("urgent breaking news red-alert broadcast style",               "red, white, electric blue"),
-        "Defense":       ("military patriotic Indian tricolor",                           "saffron, white, green, navy"),
-        "India Politics":("formal political rally stage with Indian flags",               "deep blue, saffron, white"),
-        "India Pakistan":("tense border atmosphere, Indian Army soldiers",                "olive green, desert beige"),
-        "Sports":        ("vibrant stadium crowd energy, dynamic action lighting",        "gold, electric blue, white"),
-        "Entertainment": ("Bollywood glam spotlight, glamorous neon lights",              "pink, gold, deep purple"),
-        "Health":        ("clean medical professional environment, calming",              "mint green, white, light blue"),
-        "Business":      ("corporate futuristic city skyline financial district",         "navy blue, gold, silver"),
-        "Technology":    ("futuristic digital circuit glowing neon cyber aesthetic",      "electric blue, neon green, black"),
-        "World":         ("global world map hologram geopolitical",                       "blue, silver, white"),
-        "Kushinagar":    ("rural UP landscape golden fields sunrise, village community",  "golden yellow, green, earthy brown"),
-        "Gorakhpur":     ("city of Gorakhpur urban streetscape, Gorakhnath temple hint",  "saffron, maroon, white"),
-    }
+#     # ── Decide mood / colour palette based on category ──────────────────
+#     mood_map = {
+#         "Crime":         ("dark red warning atmosphere, crime scene yellow tape",         "crimson and dark red"),
+#         "Breaking":      ("urgent breaking news red-alert broadcast style",               "red, white, electric blue"),
+#         "Defense":       ("military patriotic Indian tricolor",                           "saffron, white, green, navy"),
+#         "India Politics":("formal political rally stage with Indian flags",               "deep blue, saffron, white"),
+#         "India Pakistan":("tense border atmosphere, Indian Army soldiers",                "olive green, desert beige"),
+#         "Sports":        ("vibrant stadium crowd energy, dynamic action lighting",        "gold, electric blue, white"),
+#         "Entertainment": ("Bollywood glam spotlight, glamorous neon lights",              "pink, gold, deep purple"),
+#         "Health":        ("clean medical professional environment, calming",              "mint green, white, light blue"),
+#         "Business":      ("corporate futuristic city skyline financial district",         "navy blue, gold, silver"),
+#         "Technology":    ("futuristic digital circuit glowing neon cyber aesthetic",      "electric blue, neon green, black"),
+#         "World":         ("global world map hologram geopolitical",                       "blue, silver, white"),
+#         "Kushinagar":    ("rural UP landscape golden fields sunrise, village community",  "golden yellow, green, earthy brown"),
+#         "Gorakhpur":     ("city of Gorakhpur urban streetscape, Gorakhnath temple hint",  "saffron, maroon, white"),
+#     }
 
-    # Fall back: check for partial category matches
-    mood_desc, palette = "dramatic news broadcast professional studio", "deep navy, gold, white"
-    for key, (m, p) in mood_map.items():
-        if key.lower() in category.lower():
-            mood_desc, palette = m, p
-            break
+#     # Fall back: check for partial category matches
+#     mood_desc, palette = "dramatic news broadcast professional studio", "deep navy, gold, white"
+#     for key, (m, p) in mood_map.items():
+#         if key.lower() in category.lower():
+#             mood_desc, palette = m, p
+#             break
 
-    # ── Emotional intensity cue ──────────────────────────────────────────
-    if emotion_score >= 8:
-        intensity = "high-drama cinematic lighting, bold shadows, urgent tension"
-    elif emotion_score >= 5:
-        intensity = "balanced editorial lighting, confident and impactful"
-    else:
-        intensity = "clean calm informational style, professional neutrality"
+#     # ── Emotional intensity cue ──────────────────────────────────────────
+#     if emotion_score >= 8:
+#         intensity = "high-drama cinematic lighting, bold shadows, urgent tension"
+#     elif emotion_score >= 5:
+#         intensity = "balanced editorial lighting, confident and impactful"
+#     else:
+#         intensity = "clean calm informational style, professional neutrality"
 
-    # ── Build the meta-prompt for the AI to refine ──────────────────────
-    meta_prompt = f"""
-You are a world-class creative director specialising in viral social media news post design.
-Generate ONE highly detailed image-generation prompt for Midjourney / DALL-E 3 / Ideogram
-to create a 1080 × 1350 px portrait professional news post image.
+#     # ── Build the meta-prompt for the AI to refine ──────────────────────
+#     meta_prompt = f"""
+# You are a world-class creative director specialising in viral social media news post design.
+# Generate ONE highly detailed image-generation prompt for Midjourney / DALL-E 3 / Ideogram
+# to create a 1080 × 1350 px portrait professional news post image.
 
-NEWS CONTEXT:
-- Headline  : {headline}
-- Category  : {category}
-- Summary   : {summary_for_prompt}
-- Mood cue  : {mood_desc}
-- Palette   : {palette}
-- Intensity : {intensity}
+# NEWS CONTEXT:
+# - Headline  : {headline}
+# - Category  : {category}
+# - Summary   : {summary_for_prompt}
+# - Mood cue  : {mood_desc}
+# - Palette   : {palette}
+# - Intensity : {intensity}
 
-PERSONAL BRANDING to embed visually in the prompt:
-- Creator name  : {PERSONAL_BRAND["name"]}
-- Handle        : {PERSONAL_BRAND["handle"]}
-- Tagline       : {PERSONAL_BRAND["tagline"]}
-- Logo hint     : {PERSONAL_BRAND["logo_desc"]}
-- Color theme   : {PERSONAL_BRAND["color_theme"]}
+# PERSONAL BRANDING to embed visually in the prompt:
+# - Creator name  : {PERSONAL_BRAND["name"]}
+# - Handle        : {PERSONAL_BRAND["handle"]}
+# - Tagline       : {PERSONAL_BRAND["tagline"]}
+# - Logo hint     : {PERSONAL_BRAND["logo_desc"]}
+# - Color theme   : {PERSONAL_BRAND["color_theme"]}
 
-MANDATORY DESIGN REQUIREMENTS you must include in the prompt:
-1. Canvas: portrait 1080×1350 px, no cropping
-2. Top strip: bold "BREAKING NEWS" or category label in white on coloured ribbon
-3. Centre: dramatic visual scene that represents the news (photorealistic, no text in the scene)
-4. Lower third: dark gradient overlay with bold Devanagari + English headline text placeholder
-5. Bottom bar: brand colours ({PERSONAL_BRAND["color_theme"]}) with watermark "{PERSONAL_BRAND["handle"]}" and tagline
-6. Typography style: bold condensed sans-serif for English, Noto Sans Devanagari style for Hindi
-7. Style: ultra-HD photorealistic editorial magazine cover, 8K quality, professional post-processing
-8. NO fake logos, NO real brand marks, NO copyrighted symbols
+# MANDATORY DESIGN REQUIREMENTS you must include in the prompt:
+# 1. Canvas: portrait 1080×1350 px, no cropping
+# 2. Top strip: bold "BREAKING NEWS" or category label in white on coloured ribbon
+# 3. Centre: dramatic visual scene that represents the news (photorealistic, no text in the scene)
+# 4. Lower third: dark gradient overlay with bold Devanagari + English headline text placeholder
+# 5. Bottom bar: brand colours ({PERSONAL_BRAND["color_theme"]}) with watermark "{PERSONAL_BRAND["handle"]}" and tagline
+# 6. Typography style: bold condensed sans-serif for English, Noto Sans Devanagari style for Hindi
+# 7. Style: ultra-HD photorealistic editorial magazine cover, 8K quality, professional post-processing
+# 8. NO fake logos, NO real brand marks, NO copyrighted symbols
 
-Return ONLY the image prompt — no explanation, no markdown, no preamble. 
-The prompt must be one long paragraph of 120–180 words.
-""".strip()
+# Return ONLY the image prompt — no explanation, no markdown, no preamble. 
+# The prompt must be one long paragraph of 120–180 words.
+# """.strip()
 
-    print("🎨 GENERATING AI IMAGE PROMPT...")
-    image_prompt = generate_ai_response(
-        prompt=meta_prompt,
-        headline=headline,
-        category=category,
-        article_text=article_text,
-        link=""
-    )
+#     print("🎨 GENERATING AI IMAGE PROMPT...")
+#     image_prompt = generate_ai_response(
+#         prompt=meta_prompt,
+#         headline=headline,
+#         category=category,
+#         article_text=article_text,
+#         link=""
+#     )
 
-    # ── Fallback static prompt if AI fails ──────────────────────────────
-    if not image_prompt or len(image_prompt.strip()) < 60:
-        image_prompt = (
-            f"Ultra-HD photorealistic professional social media news post, portrait 1080x1350px. "
-            f"Top: bold red ribbon strip with white text 'BREAKING NEWS — {category}'. "
-            f"Centre: dramatic {mood_desc} scene representing the news event, cinematic {intensity}, "
-            f"colour palette of {palette}. Lower third: dark semi-transparent gradient overlay with "
-            f"bold white condensed headline placeholder text. "
-            f"Bottom bar in {PERSONAL_BRAND['color_theme']} colours featuring watermark "
-            f"'{PERSONAL_BRAND['handle']}' in gold and tagline '{PERSONAL_BRAND['tagline']}' "
-            f"in small white text. {PERSONAL_BRAND['logo_desc']} in bottom-right corner. "
-            f"Style: editorial magazine cover quality, 8K, professional post-processing, no fake logos."
-        )
+#     # ── Fallback static prompt if AI fails ──────────────────────────────
+#     if not image_prompt or len(image_prompt.strip()) < 60:
+#         image_prompt = (
+#             f"Ultra-HD photorealistic professional social media news post, portrait 1080x1350px. "
+#             f"Top: bold red ribbon strip with white text 'BREAKING NEWS — {category}'. "
+#             f"Centre: dramatic {mood_desc} scene representing the news event, cinematic {intensity}, "
+#             f"colour palette of {palette}. Lower third: dark semi-transparent gradient overlay with "
+#             f"bold white condensed headline placeholder text. "
+#             f"Bottom bar in {PERSONAL_BRAND['color_theme']} colours featuring watermark "
+#             f"'{PERSONAL_BRAND['handle']}' in gold and tagline '{PERSONAL_BRAND['tagline']}' "
+#             f"in small white text. {PERSONAL_BRAND['logo_desc']} in bottom-right corner. "
+#             f"Style: editorial magazine cover quality, 8K, professional post-processing, no fake logos."
+#         )
 
-    return image_prompt.strip()
+#     return image_prompt.strip()
 
 
-def build_image_prompt_message(
-    headline: str,
-    category: str,
-    article_text: str,
-    final_score: float,
-    emotion_score: int,
-    short_link: str,
-    article_idx: int,
-) -> str:
-    """
-    Wraps the raw image prompt in a formatted Telegram message block.
-    """
-    prompt_text = generate_image_prompt(
-        headline=headline,
-        category=category,
-        article_text=article_text,
-        final_score=final_score,
-        emotion_score=emotion_score,
-        short_link=short_link,
-    )
+# def build_image_prompt_message(
+#     headline: str,
+#     category: str,
+#     article_text: str,
+#     final_score: float,
+#     emotion_score: int,
+#     short_link: str,
+#     article_idx: int,
+# ) -> str:
+#     """
+#     Wraps the raw image prompt in a formatted Telegram message block.
+#     """
+#     prompt_text = generate_image_prompt(
+#         headline=headline,
+#         category=category,
+#         article_text=article_text,
+#         final_score=final_score,
+#         emotion_score=emotion_score,
+#         short_link=short_link,
+#     )
 
-    message = f"""
-🎨 AI IMAGE PROMPT — Article #{article_idx}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📐 Target Size : 1080 × 1350 px (Portrait / Instagram Post)
-📂 Category    : {category}
-📰 Headline    : {headline}
-📈 Viral Score : {final_score}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#     message = f"""
+# 🎨 AI IMAGE PROMPT — Article #{article_idx}
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📐 Target Size : 1080 × 1350 px (Portrait / Instagram Post)
+# 📂 Category    : {category}
+# 📰 Headline    : {headline}
+# 📈 Viral Score : {final_score}
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🖼️ PASTE THIS PROMPT IN MIDJOURNEY / DALL-E 3 / IDEOGRAM:
+# 🖼️ PASTE THIS PROMPT IN MIDJOURNEY / DALL-E 3 / IDEOGRAM:
 
-{prompt_text}
+# {prompt_text}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 TIPS:
-• Midjourney   → paste prompt + add  --ar 4:5 --v 6 --style raw
-• DALL-E 3     → paste as-is in ChatGPT image mode
-• Ideogram     → paste prompt, select "Realistic" style, 1080×1350
-• Canva AI     → use as text-to-image prompt, set canvas 1080×1350
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 💡 TIPS:
+# • Midjourney   → paste prompt + add  --ar 4:5 --v 6 --style raw
+# • DALL-E 3     → paste as-is in ChatGPT image mode
+# • Ideogram     → paste prompt, select "Realistic" style, 1080×1350
+# • Canva AI     → use as text-to-image prompt, set canvas 1080×1350
 
-🔗 News Link: {short_link}
-📸 {PERSONAL_BRAND["instagram"]}
-""".strip()
+# 🔗 News Link: {short_link}
+# 📸 {PERSONAL_BRAND["instagram"]}
+# """.strip()
 
-    return message
+#     return message
 
 # =========================================================
 # KEYWORD BANKS
@@ -1361,19 +1361,19 @@ Follow us on:
         # with news context + personal branding embedded
         # =================================================
 
-        print(f"🎨 GENERATING IMAGE PROMPT for article #{article_idx}...")
-        image_prompt_message = build_image_prompt_message(
-            headline=headline,
-            category=category,
-            article_text=article_text,
-            final_score=final_score,
-            emotion_score=emotion_score,
-            short_link=short_link,
-            article_idx=article_idx,
-        )
+        # print(f"🎨 GENERATING IMAGE PROMPT for article #{article_idx}...")
+        # image_prompt_message = build_image_prompt_message(
+        #     headline=headline,
+        #     category=category,
+        #     article_text=article_text,
+        #     final_score=final_score,
+        #     emotion_score=emotion_score,
+        #     short_link=short_link,
+        #     article_idx=article_idx,
+        # )
 
-        send_telegram_message(image_prompt_message)
-        print(f"✅ CHUNK 2 (IMAGE PROMPT) SENT — Article #{article_idx}")
+        # send_telegram_message(image_prompt_message)
+        # print(f"✅ CHUNK 2 (IMAGE PROMPT) SENT — Article #{article_idx}")
 
         # =================================================
         # STORE RESULT
