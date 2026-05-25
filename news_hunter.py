@@ -1,5 +1,6 @@
 import feedparser
 import pandas as pd
+from canva_ai import generate_news_poster
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from openai import OpenAI
@@ -175,6 +176,47 @@ def send_telegram_message(message):
                 print(f"✅ TELEGRAM SENT -> chat_id={target_chat_id}")
             except Exception as e:
                 print(f"❌ TELEGRAM ERROR -> chat_id={target_chat_id}:", e)
+
+# =========================================================
+# SEND TELEGRAM PHOTO
+# =========================================================
+
+def send_telegram_photo(photo_path, caption):
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+
+    chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
+
+    if not chat_ids and CHAT_ID:
+        chat_ids = [CHAT_ID]
+
+    if not chat_ids:
+        print("❌ NO CHAT IDs FOUND")
+        return
+
+    for chat_id in chat_ids:
+
+        try:
+
+            with open(photo_path, "rb") as photo:
+
+                response = requests.post(
+                    url,
+                    data={
+                        "chat_id": chat_id,
+                        "caption": caption[:1024]
+                    },
+                    files={
+                        "photo": photo
+                    },
+                    timeout=60
+                )
+
+            print(f"✅ PHOTO SENT -> {chat_id}")
+
+        except Exception as e:
+
+            print(f"❌ TELEGRAM PHOTO ERROR ({chat_id}):", e)
 
 # =========================================================
 # URL HELPERS
@@ -1374,6 +1416,39 @@ Source Link: {link}
             article_text=article_text,
             link=link
         )
+       
+
+        # =====================================================
+        # GENERATE CANVA AI POSTER
+        # =====================================================
+    
+        print("🎨 GENERATING CANVA AI POSTER...")
+    
+        visual_prompt = f"""
+        Breaking Indian news poster.
+    
+        Headline:
+        {headline}
+    
+        Category:
+        {category}
+    
+        News Summary:
+        {ai_result[:500]}
+    
+        Style:
+        Ultra realistic
+        Hindi breaking news
+        Indian newsroom
+        Cinematic lighting
+        Viral Instagram post
+        Red and black theme
+        1080x1350 portrait
+        """
+    
+        generate_news_poster(visual_prompt)
+    
+        print("✅ CANVA POSTER GENERATED")
 
         emotion_match  = re.search(r"Emotion Score:\s*(\d+)/10", ai_result)
         virality_match = re.search(r"Virality Score:\s*(\d+)/10", ai_result)
@@ -1405,6 +1480,21 @@ Source Link: {link}
             continue
 
         print(f"🚀 FINAL SCORE PASSED ({final_score}) — SENDING TELEGRAM")
+        # =====================================================
+        # GENERATE CANVA AI POSTER
+        # =====================================================
+        
+        try:
+        
+            print("🎨 GENERATING CANVA POSTER...")
+        
+            generate_news_poster(ai_result)
+        
+            print("✅ POSTER GENERATED")
+        
+        except Exception as e:
+        
+            print("❌ CANVA ERROR:", e)
 
         cleaned_link = clean_url(link)
         short_link   = shorten_url(cleaned_link)
@@ -1431,7 +1521,10 @@ Follow us on:
 📘 Facebook: https://www.facebook.com/share/1D627R2qFV/
 """
 
-        send_telegram_message(telegram_message)
+        send_telegram_photo(
+            photo_path="downloads/news.png",
+            caption=telegram_message
+        )
         print("✅ SENT TO TELEGRAM")
 
         results.append({
