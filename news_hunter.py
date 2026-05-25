@@ -317,44 +317,72 @@ def generate_image_huggingface(prompt, save_path):
         "inputs": prompt
     }
 
-   for attempt in range(3):
+    # =====================================================
+    # RETRY LOOP
+    # =====================================================
+
+    for attempt in range(3):
 
         try:
-    
+
             response = requests.post(
                 API_URL,
                 headers=headers,
                 json=payload,
                 timeout=180
             )
-    
+
+            # =================================================
+            # SUCCESS
+            # =================================================
+
             if response.status_code == 200:
-    
+
                 image = Image.open(
                     io.BytesIO(response.content)
                 )
-    
+
+                # Instagram 4:5 resize
                 image = image.resize((1080, 1350))
-    
+
+                os.makedirs(
+                    os.path.dirname(save_path),
+                    exist_ok=True
+                )
+
                 image.save(save_path)
-    
-                print(f"✅ HuggingFace image saved")
-    
+
+                print(f"✅ HuggingFace image saved: {save_path}")
+
                 return save_path
-    
+
+            # =================================================
+            # API ERROR
+            # =================================================
+
             else:
-    
+
                 print(
                     f"❌ HF Error {response.status_code}"
                 )
-    
+
                 print(response.text[:300])
-    
+
         except Exception as e:
-    
-            print(f"⚠️ HF attempt {attempt+1} failed: {e}")
-    
+
+            print(
+                f"⚠️ HF attempt {attempt + 1} failed: {e}"
+            )
+
             time.sleep(5)
+
+    # =====================================================
+    # TOTAL FAILURE
+    # =====================================================
+
+    print("❌ HuggingFace failed after 3 attempts")
+
+    return None
 
 # =========================================================
 # CANVA AI
