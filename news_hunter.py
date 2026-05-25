@@ -414,151 +414,173 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
     return results
 
 # =========================================================
-# RSS FEEDS
+# CLEAN RSS FEEDS (LOW DUPLICATES + HIGH VIRAL POTENTIAL)
 # =========================================================
 
 RSS_FEEDS = {
-    "Kushinagar":
-        "https://news.google.com/rss/headlines/section/geo/Kushinagar?hl=en-IN&gl=IN&ceid=IN:en",
-    "Gorakhpur":
-        "https://news.google.com/rss/headlines/section/geo/Gorakhpur?hl=en-IN&gl=IN&ceid=IN:en",
-    "Maharajganj":
-        "https://news.google.com/rss/headlines/section/geo/Maharajganj?hl=en-IN&gl=IN&ceid=IN:en",
-    "Deoria":
-        "https://news.google.com/rss/headlines/section/geo/Deoria?hl=en-IN&gl=IN&ceid=IN:en",
-    "Basti":
-        "https://news.google.com/rss/headlines/section/geo/Basti,Uttar Pradesh?hl=en-IN&gl=IN&ceid=IN:en",
-    "Azamgarh":
-        "https://news.google.com/rss/headlines/section/geo/Azamgarh?hl=en-IN&gl=IN&ceid=IN:en",
-    "Varanasi":
-        "https://news.google.com/rss/headlines/section/geo/Varanasi?hl=en-IN&gl=IN&ceid=IN:en",
-    "Lucknow":
-        "https://news.google.com/rss/headlines/section/geo/Lucknow?hl=en-IN&gl=IN&ceid=IN:en",
-    "Ayodhya":
-        "https://news.google.com/rss/headlines/section/geo/Ayodhya?hl=en-IN&gl=IN&ceid=IN:en",
-    "Prayagraj":
-        "https://news.google.com/rss/headlines/section/geo/Prayagraj?hl=en-IN&gl=IN&ceid=IN:en",
-    "GNews_Kushinagar_HI":
+
+    # =====================================================
+    # HYPERLOCAL / PURVANCHAL
+    # =====================================================
+
+    "Kushinagar_HI":
         "https://news.google.com/rss/search?q=कुशीनगर&hl=hi-IN&gl=IN&ceid=IN:hi",
-    "GNews_Gorakhpur_HI":
+
+    "Gorakhpur_HI":
         "https://news.google.com/rss/search?q=गोरखपुर&hl=hi-IN&gl=IN&ceid=IN:hi",
-    "GNews_UP_HI":
-        "https://news.google.com/rss/search?q=उत्तर+प्रदेश&hl=hi-IN&gl=IN&ceid=IN:hi",
-    "GNews_Purvanchal_HI":
+
+    "Deoria_HI":
+        "https://news.google.com/rss/search?q=देवरिया&hl=hi-IN&gl=IN&ceid=IN:hi",
+
+    "Maharajganj_HI":
+        "https://news.google.com/rss/search?q=महराजगंज&hl=hi-IN&gl=IN&ceid=IN:hi",
+
+    "Basti_HI":
+        "https://news.google.com/rss/search?q=बस्ती+उत्तर+प्रदेश&hl=hi-IN&gl=IN&ceid=IN:hi",
+
+    "Purvanchal_HI":
         "https://news.google.com/rss/search?q=पूर्वांचल&hl=hi-IN&gl=IN&ceid=IN:hi",
-    "India":
-        "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
-    "India Politics":
+
+    # =====================================================
+    # UTTAR PRADESH TRENDING
+    # =====================================================
+
+    "UP_Breaking":
+        "https://news.google.com/rss/search?q=उत्तर+प्रदेश+ब्रेकिंग&hl=hi-IN&gl=IN&ceid=IN:hi",
+
+    "UP_Politics":
+        "https://news.google.com/rss/search?q=उत्तर+प्रदेश+राजनीति&hl=hi-IN&gl=IN&ceid=IN:hi",
+
+    "UP_Crime":
+        "https://news.google.com/rss/search?q=उत्तर+प्रदेश+अपराध&hl=hi-IN&gl=IN&ceid=IN:hi",
+
+    "UP_Weather":
+        "https://news.google.com/rss/search?q=यूपी+मौसम+बारिश+आंधी&hl=hi-IN&gl=IN&ceid=IN:hi",
+
+    # =====================================================
+    # INDIA TRENDING
+    # =====================================================
+
+    "India_Breaking":
+        "https://news.google.com/rss/search?q=india+breaking&hl=en-IN&gl=IN&ceid=IN:en",
+
+    "India_Politics":
         "https://news.google.com/rss/search?q=india+politics&hl=en-IN&gl=IN&ceid=IN:en",
-    "India Pakistan":
-        "https://news.google.com/rss/search?q=india+pakistan&hl=en-IN&gl=IN&ceid=IN:en",
-    "India China":
+
+    "India_China":
         "https://news.google.com/rss/search?q=india+china&hl=en-IN&gl=IN&ceid=IN:en",
-    "Breaking":
-        "https://news.google.com/rss/search?q=breaking+india&hl=en-IN&gl=IN&ceid=IN:en",
-    "Crime":
-        "https://news.google.com/rss/search?q=india+crime&hl=en-IN&gl=IN&ceid=IN:en",
+
+    "India_Pakistan":
+        "https://news.google.com/rss/search?q=india+pakistan&hl=en-IN&gl=IN&ceid=IN:en",
+
+    # =====================================================
+    # VIRAL CATEGORIES
+    # =====================================================
+
     "Defense":
-        "https://news.google.com/rss/search?q=india+army+defense&hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=india+army+missile+defense&hl=en-IN&gl=IN&ceid=IN:en",
+
     "AI":
-        "https://news.google.com/rss/search?q=artificial+intelligence+india&hl=en-IN&gl=IN&ceid=IN:en",
-    "Business":
-        "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-IN&gl=IN&ceid=IN:en",
+        "https://news.google.com/rss/search?q=artificial+intelligence&hl=en-IN&gl=IN&ceid=IN:en",
+
     "World":
         "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-IN&gl=IN&ceid=IN:en",
-    "Entertainment":
-        "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=en-IN&gl=IN&ceid=IN:en",
-    "Sports":
-        "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=en-IN&gl=IN&ceid=IN:en",
-    "Health":
-        "https://news.google.com/rss/headlines/section/topic/HEALTH?hl=en-IN&gl=IN&ceid=IN:en",
-    "Technology":
-        "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-IN&gl=IN&ceid=IN:en",
-    "Modi":
-        "https://news.google.com/rss/search?q=narendra+modi&hl=en-IN&gl=IN&ceid=IN:en",
-    "India_Weather":
-        "https://news.google.com/rss/search?q=india+weather+flood+rain&hl=en-IN&gl=IN&ceid=IN:en",
-    "AmarUjala_UP_RSS":     "https://www.amarujala.com/rss/uttar-pradesh.xml",
-    "Jagran_UP_RSS":        "https://www.jagran.com/rss/news-uttar-pradesh.xml",
-    "Hindustan_UP_RSS":     "https://feed.livehindustan.com/rss/3130",
-    "Bhaskar_UP_RSS":       "https://www.bhaskar.com/rss-feed/1063/",
-    "ABP_UP_RSS":           "https://www.abplive.com/states/up-uk/feed",
-    "Patrika_UP_RSS":       "https://api.patrika.com/rss/uttar-pradesh-news",
-    "News18_Hindi_UP_RSS":  "https://hindi.news18.com/rss/khabar/uttar-pradesh.xml",
-    "Reuters World":        "https://feeds.reuters.com/Reuters/worldNews",
-    "BBC World":            "http://feeds.bbci.co.uk/news/world/rss.xml",
-    "BBC India":            "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml",
-    "Al Jazeera":           "https://www.aljazeera.com/xml/rss/all.xml",
-    "Reddit India":         "https://www.reddit.com/r/india/.rss",
-    "Reddit WorldNews":     "https://www.reddit.com/r/worldnews/.rss",
-    "Reddit Geopolitics":   "https://www.reddit.com/r/geopolitics/.rss",
-    "GaonConnection_RSS":   "https://www.gaonconnection.com/feed",
+
+    # =====================================================
+    # PREMIUM RSS SOURCES
+    # =====================================================
+
+    "AmarUjala_UP_RSS":
+        "https://www.amarujala.com/rss/uttar-pradesh.xml",
+
+    "Jagran_UP_RSS":
+        "https://www.jagran.com/rss/news-uttar-pradesh.xml",
+
+    "Hindustan_UP_RSS":
+        "https://feed.livehindustan.com/rss/3130",
+
+    "Bhaskar_UP_RSS":
+        "https://www.bhaskar.com/rss-feed/1063/",
+
+    "ABP_UP_RSS":
+        "https://www.abplive.com/states/up-uk/feed",
+
+    "News18_Hindi_UP_RSS":
+        "https://hindi.news18.com/rss/khabar/uttar-pradesh.xml",
+
+    # =====================================================
+    # GLOBAL + GEOPOLITICS
+    # =====================================================
+
+    "Reuters_World":
+        "https://feeds.reuters.com/Reuters/worldNews",
+
+    "BBC_India":
+        "http://feeds.bbci.co.uk/news/world/asia/india/rss.xml",
+
+    "Al_Jazeera":
+        "https://www.aljazeera.com/xml/rss/all.xml",
+
+    # =====================================================
+    # REDDIT SIGNALS (OPTIONAL BUT GOOD)
+    # =====================================================
+
+    "Reddit_India":
+        "https://www.reddit.com/r/india/.rss",
+
+    "Reddit_WorldNews":
+        "https://www.reddit.com/r/worldnews/.rss",
+
+    "Reddit_Geopolitics":
+        "https://www.reddit.com/r/geopolitics/.rss",
 }
 
+
 # =========================================================
-# LOCAL SCRAPERS
+# CLEAN LOCAL SCRAPERS
 # =========================================================
 
 LOCAL_SCRAPERS = {
-    "AmarUjala_Kushinagar": "https://www.amarujala.com/uttar-pradesh/kushinagar",
-    "AmarUjala_Gorakhpur":  "https://www.amarujala.com/uttar-pradesh/gorakhpur",
-    "AmarUjala_Deoria":     "https://www.amarujala.com/uttar-pradesh/deoria",
-    "AmarUjala_Maharajganj":"https://www.amarujala.com/uttar-pradesh/maharajganj",
-    "AmarUjala_Basti":      "https://www.amarujala.com/uttar-pradesh/basti",
-    "AmarUjala_UP":         "https://www.amarujala.com/uttar-pradesh",
-    "Bhaskar_Kushinagar":   "https://www.bhaskar.com/local/uttar-pradesh/kushinagar/",
-    "Bhaskar_Gorakhpur":    "https://www.bhaskar.com/local/uttar-pradesh/gorakhpur/",
-    "Bhaskar_Deoria":       "https://www.bhaskar.com/local/uttar-pradesh/deoria/",
-    "Bhaskar_Maharajganj":  "https://www.bhaskar.com/local/uttar-pradesh/maharajganj/",
-    "Bhaskar_Basti":        "https://www.bhaskar.com/local/uttar-pradesh/basti/",
-    "Bhaskar_UP":           "https://www.bhaskar.com/local/uttar-pradesh/",
-    "Hindustan_Kushinagar": "https://www.livehindustan.com/uttar-pradesh/kushinagar",
-    "Hindustan_Gorakhpur":  "https://www.livehindustan.com/uttar-pradesh/gorakhpur",
-    "Hindustan_Deoria":     "https://www.livehindustan.com/uttar-pradesh/deoria",
-    "Hindustan_Maharajganj":"https://www.livehindustan.com/uttar-pradesh/maharajganj",
-    "Hindustan_Basti":      "https://www.livehindustan.com/uttar-pradesh/basti",
-    "Hindustan_UP":         "https://www.livehindustan.com/uttar-pradesh",
-    "Jagran_Gorakhpur":     "https://www.jagran.com/uttar-pradesh/gorakhpur-city-news-hindi.html",
-    "Jagran_Kushinagar":    "https://www.jagran.com/uttar-pradesh/kushinagar-news-hindi.html",
-    "Jagran_Deoria":        "https://www.jagran.com/uttar-pradesh/deoria-news-hindi.html",
-    "Jagran_Maharajganj":   "https://www.jagran.com/uttar-pradesh/maharajganj-news-hindi.html",
-    "Jagran_Basti":         "https://www.jagran.com/uttar-pradesh/basti-news-hindi.html",
-    "Jagran_UP":            "https://www.jagran.com/uttar-pradesh/",
-    "Patrika_Gorakhpur":    "https://www.patrika.com/gorakhpur-news/",
-    "Patrika_Deoria":       "https://www.patrika.com/deoria-news/",
-    "Patrika_UP":           "https://www.patrika.com/uttar-pradesh-news/",
-    "News18_UP":            "https://hindi.news18.com/uttar-pradesh/",
-    "News18_Gorakhpur":     "https://hindi.news18.com/news/uttar-pradesh/gorakhpur/",
-    "News18_Kushinagar":    "https://hindi.news18.com/news/uttar-pradesh/kushinagar/",
-    "ETVBharat_UP":         "https://www.etvbharat.com/hindi/uttar-pradesh",
-    "ETVBharat_Gorakhpur":  "https://www.etvbharat.com/hindi/uttar-pradesh/state/gorakhpur",
-    "ETVBharat_Kushinagar": "https://www.etvbharat.com/hindi/uttar-pradesh/state/kushinagar",
-    "ZeeUPUK":              "https://zeenews.india.com/hindi/india/up-uttarakhand",
-    "ZeeUP":                "https://zeenews.india.com/hindi/tags/uttar-pradesh-news.html",
-    "ZeeGorakhpur":         "https://zeenews.india.com/hindi/tags/gorakhpur-news.html",
-    "TV9_UP":               "https://www.tv9hindi.com/state/uttar-pradesh",
-    "TV9_Gorakhpur":        "https://www.tv9hindi.com/tag/gorakhpur",
-    "TV9_Kushinagar":       "https://www.tv9hindi.com/tag/kushinagar",
-    "AajTak_UP":            "https://www.aajtak.in/uttar-pradesh",
-    "AajTak_Gorakhpur":     "https://www.aajtak.in/topic/gorakhpur",
-    "AajTak_Kushinagar":    "https://www.aajtak.in/topic/kushinagar",
-    "AajTak_Crime":         "https://www.aajtak.in/crime",
-    "ABP_UP":               "https://www.abplive.com/states/up-uk",
-    "ABP_Gorakhpur":        "https://www.abplive.com/topic/gorakhpur",
-    "ABP_Kushinagar":       "https://www.abplive.com/topic/kushinagar",
-    "IndiaTV_UP":           "https://www.indiatv.in/uttar-pradesh",
-    "IndiaTV_Gorakhpur":    "https://www.indiatv.in/topic/gorakhpur",
-    "IndiaTV_Kushinagar":   "https://www.indiatv.in/topic/kushinagar",
-    "Webdunia_UP":          "https://hindi.webdunia.com/regional-hindi-news/uttar-pradesh/",
-    "GorakhpurLive":        "https://gorakhpurlive.com/",
-    "PurvanchalNews":       "https://purvanchalnews.com/",
-    "UPTak":                "https://www.uptak.in/",
-    "JanSatta_UP":          "https://www.jansatta.com/national/uttar-pradesh/",
-    "UPPolice":             "https://uppolice.gov.in/",
-    "PIB_UP":               "https://pib.gov.in/statewise.aspx?state=U",
-    "IMD":                  "https://mausam.imd.gov.in/",
-    "HealthDeptUP":         "http://up-health.in/",
+
+    # =====================================================
+    # TOP UP SOURCES
+    # =====================================================
+
+    "AmarUjala_UP":
+        "https://www.amarujala.com/uttar-pradesh",
+
+    "Bhaskar_UP":
+        "https://www.bhaskar.com/local/uttar-pradesh/",
+
+    "Hindustan_UP":
+        "https://www.livehindustan.com/uttar-pradesh",
+
+    "Jagran_UP":
+        "https://www.jagran.com/uttar-pradesh/",
+
+    "News18_UP":
+        "https://hindi.news18.com/uttar-pradesh/",
+
+    "TV9_UP":
+        "https://www.tv9hindi.com/state/uttar-pradesh",
+
+    "AajTak_UP":
+        "https://www.aajtak.in/uttar-pradesh",
+
+    "UPTak":
+        "https://www.uptak.in/",
+
+    # =====================================================
+    # LOCAL HYPERLOCAL BONUS
+    # =====================================================
+
+    "GorakhpurLive":
+        "https://gorakhpurlive.com/",
+
+    "PurvanchalNews":
+        "https://purvanchalnews.com/",
 }
+
 
 # =========================================================
 # YOUTUBE FEEDS
