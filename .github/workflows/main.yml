@@ -96,6 +96,10 @@ jobs:
 
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
+          CANVA_EMAIL: ${{ secrets.CANVA_EMAIL }}
+
+          CANVA_PASSWORD: ${{ secrets.CANVA_PASSWORD }}
+
         run: |
 
           echo "🔥 STARTING NEWS HUNTER BOT"
