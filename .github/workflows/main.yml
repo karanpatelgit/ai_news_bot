@@ -57,7 +57,8 @@ jobs:
             huggingface_hub \
             trafilatura \
             beautifulsoup4 \
-            lxml
+            lxml \
+            playwright
 
       # ===================================================
       # SHOW DEBUG INFO
