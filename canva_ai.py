@@ -66,17 +66,34 @@ SIZE:
 
     os.makedirs("downloads", exist_ok=True)
 
-    with sync_playwright() as p:
+   with sync_playwright() as p:
 
         browser = p.chromium.launch(
-            headless=False
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled"
+            ]
         )
-
+    
         context = browser.new_context(
-            accept_downloads=True
+            viewport={"width": 1400, "height": 1200}
         )
-
+    
         page = context.new_page()
+    
+        # Anti-bot protection
+        page.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined
+        })
+        """)
+    
+        # OPEN CANVA
+        page.goto("https://www.canva.com/")
 
         print("🚀 Opening Canva AI Generator...")
 
