@@ -558,45 +558,6 @@ RSS_FEEDS = {
 
 LOCAL_SCRAPERS = {
 
-    # =====================================================
-    # TOP UP SOURCES
-    # =====================================================
-
-    "AmarUjala_UP":
-        "https://www.amarujala.com/uttar-pradesh",
-
-    "Bhaskar_UP":
-        "https://www.bhaskar.com/local/uttar-pradesh/",
-
-    "Hindustan_UP":
-        "https://www.livehindustan.com/uttar-pradesh",
-
-    "Jagran_UP":
-        "https://www.jagran.com/uttar-pradesh/",
-
-    "News18_UP":
-        "https://hindi.news18.com/uttar-pradesh/",
-
-    "TV9_UP":
-        "https://www.tv9hindi.com/state/uttar-pradesh",
-
-    "AajTak_UP":
-        "https://www.aajtak.in/uttar-pradesh",
-
-    "UPTak":
-        "https://www.uptak.in/",
-
-    # =====================================================
-    # LOCAL HYPERLOCAL BONUS
-    # =====================================================
-
-    "GorakhpurLive":
-        "https://gorakhpurlive.com/",
-
-    "PurvanchalNews":
-        "https://purvanchalnews.com/",
-    "GaonConnection":
-        "https://www.gaonconnection.com/feed",
 
 }
 
