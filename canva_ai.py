@@ -64,9 +64,19 @@ SIZE:
 1080x1350 portrait Instagram post
 """
 
+    # =====================================================
+    # CREATE DOWNLOAD FOLDER
+    # =====================================================
+
     os.makedirs("downloads", exist_ok=True)
 
-   with sync_playwright() as p:
+    save_path = "downloads/news.png"
+
+    # =====================================================
+    # START PLAYWRIGHT
+    # =====================================================
+
+    with sync_playwright() as p:
 
         browser = p.chromium.launch(
             headless=True,
@@ -78,72 +88,92 @@ SIZE:
                 "--disable-blink-features=AutomationControlled"
             ]
         )
-    
+
         context = browser.new_context(
-            viewport={"width": 1400, "height": 1200}
+            viewport={"width": 1400, "height": 1200},
+            accept_downloads=True
         )
-    
+
         page = context.new_page()
-    
-        # Anti-bot protection
+
+        # =================================================
+        # ANTI-BOT SCRIPT
+        # =================================================
+
         page.add_init_script("""
         Object.defineProperty(navigator, 'webdriver', {
             get: () => undefined
-        })
+        });
         """)
-    
+
+        # =================================================
         # OPEN CANVA
-        page.goto("https://www.canva.com/")
+        # =================================================
 
         print("🚀 Opening Canva AI Generator...")
 
-        page.goto("https://www.canva.com/ai-image-generator/")
+        page.goto(
+            "https://www.canva.com/ai-image-generator/",
+            timeout=120000
+        )
 
         time.sleep(8)
 
         # =================================================
-        # LOGIN
+        # LOGIN IF REQUIRED
         # =================================================
 
-        if "login" in page.url.lower() or page.locator('input[type="email"]').count() > 0:
+        try:
 
-            print("🔐 Logging into Canva...")
+            if (
+                "login" in page.url.lower()
+                or page.locator('input[type="email"]').count() > 0
+            ):
 
-            page.fill(
-                'input[type="email"]',
-                CANVA_EMAIL
-            )
+                print("🔐 Logging into Canva...")
 
-            page.click(
-                'button[type="submit"]'
-            )
+                page.fill(
+                    'input[type="email"]',
+                    CANVA_EMAIL
+                )
 
-            time.sleep(3)
+                page.click('button[type="submit"]')
 
-            page.fill(
-                'input[type="password"]',
-                CANVA_PASSWORD
-            )
+                time.sleep(5)
 
-            page.click(
-                'button[type="submit"]'
-            )
+                page.fill(
+                    'input[type="password"]',
+                    CANVA_PASSWORD
+                )
 
-            time.sleep(10)
+                page.click('button[type="submit"]')
 
-            page.goto("https://www.canva.com/ai-image-generator/")
+                print("⏳ Waiting for login...")
 
-            time.sleep(6)
+                time.sleep(15)
+
+                page.goto(
+                    "https://www.canva.com/ai-image-generator/"
+                )
+
+                time.sleep(10)
+
+        except Exception as e:
+
+            print(f"⚠️ Login step skipped/failure: {e}")
 
         # =================================================
         # ENTER AI PROMPT
         # =================================================
 
-        print("✍️ Sending article to Canva AI...")
+        print("✍️ Sending prompt to Canva AI...")
 
         textarea = page.locator("textarea").first
 
-        textarea.wait_for(state="visible", timeout=15000)
+        textarea.wait_for(
+            state="visible",
+            timeout=30000
+        )
 
         textarea.click()
 
@@ -152,7 +182,7 @@ SIZE:
         time.sleep(2)
 
         # =================================================
-        # GENERATE IMAGE
+        # CLICK GENERATE
         # =================================================
 
         print("🎨 Generating AI News Poster...")
@@ -166,27 +196,26 @@ SIZE:
         generate_button.click()
 
         # =================================================
-        # WAIT FOR GENERATION
+        # WAIT FOR AI GENERATION
         # =================================================
 
-        print("⏳ Waiting for Canva AI generation...")
+        print("⏳ Waiting for Canva AI image generation...")
 
         time.sleep(60)
 
-        print("✅ AI poster generated")
+        print("✅ AI Poster Generated")
 
         # =================================================
-        # DOWNLOAD IMAGE — METHOD 1: keyboard shortcut
+        # DOWNLOAD METHOD 1
         # =================================================
 
-        save_path = "downloads/news.png"
         downloaded = False
 
         try:
 
-            print("📥 Downloading poster...")
+            print("📥 Trying download method 1...")
 
-            with page.expect_download(timeout=30000) as download_info:
+            with page.expect_download(timeout=60000) as download_info:
 
                 page.keyboard.press("Control+Shift+E")
 
@@ -213,7 +242,7 @@ SIZE:
             print(f"⚠️ Download method 1 failed: {e}")
 
         # =================================================
-        # DOWNLOAD IMAGE — METHOD 2: direct button fallback
+        # DOWNLOAD METHOD 2
         # =================================================
 
         if not downloaded:
@@ -222,7 +251,7 @@ SIZE:
 
                 print("📥 Trying alternate download method...")
 
-                with page.expect_download(timeout=30000) as download_info:
+                with page.expect_download(timeout=60000) as download_info:
 
                     page.locator(
                         "button"
@@ -242,9 +271,33 @@ SIZE:
 
                 print(f"❌ Both download methods failed: {e}")
 
+        # =================================================
+        # CLOSE BROWSER
+        # =================================================
+
         browser.close()
+
+        # =================================================
+        # RETURN FILE
+        # =================================================
 
         if downloaded:
             return save_path
 
         return None
+
+
+# =========================================================
+# TEST RUN
+# =========================================================
+
+if __name__ == "__main__":
+
+    article = """
+    Gorakhpur में 100 रिंगनेक तोतों के साथ तस्कर गिरफ्तार।
+    पुलिस ने वन्यजीव तस्करी गिरोह का बड़ा खुलासा किया।
+    """
+
+    result = generate_news_poster(article)
+
+    print(result)
