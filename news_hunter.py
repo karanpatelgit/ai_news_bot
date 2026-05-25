@@ -56,7 +56,7 @@ print("=" * 50)
 # CONFIG
 # =========================================================
 
-MAX_WORKERS           = 6
+MAX_WORKERS           = 32
 AI_SLEEP_TIME         = 1
 TELEGRAM_SLEEP_TIME   = 1
 LOCAL_NEWS_BONUS      = 2.5
@@ -402,19 +402,16 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
 
         print(f"🔍 [{site_name}] Found {len(links_found)} candidate headlines")
 
-        for headline, article_url in links_found:
+        def _fetch_one(hl_url):
+            headline, article_url = hl_url
             article_text = fetch_full_article(article_url)
             if not article_text or len(article_text.strip()) < 80:
                 article_text = headline
-
-            results.append({
-                "source":   "scraper",
-                "category": site_name,
-                "headline": headline,
-                "link":     article_url,
-                "article":  article_text
-            })
-
+            return {"source": "scraper", "category": site_name,
+                    "headline": headline, "link": article_url, "article": article_text}
+        
+        with ThreadPoolExecutor(max_workers=min(len(links_found), 8)) as art_pool:
+            results = list(art_pool.map(_fetch_one, links_found))
     except Exception as e:
         print(f"❌ [{site_name}] Scraper error: {e}")
 
@@ -648,29 +645,44 @@ YOUTUBE_FEEDS = {
 # =========================================================
 
 all_news = []
+_all_rss_news_lock = threading.Lock()
 print("\n========== FETCHING RSS FEEDS ==========")
 
-for category, url in RSS_FEEDS.items():
+def _fetch_rss_feed(cat_url_pair):
+    category, url = cat_url_pair
     try:
-        print(f"📡 RSS: {category}")
-        feed    = feedparser.parse(url)
-        entries = feed.entries[:RSS_MAX_PER_FEED]
-
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            process_func = partial(process_single_entry, category=category)
-            futures = [executor.submit(process_func, entry) for entry in entries]
-
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                    if result:
-                        all_news.append(result)
-                except Exception as e:
-                    print("❌ FUTURE ERROR:", e)
-
-        print(f"  ✅ {category} RSS DONE — total so far: {len(all_news)}")
+        feed = feedparser.parse(url)
+        return category, feed.entries[:RSS_MAX_PER_FEED]
     except Exception as e:
-        print(f"  ❌ RSS ERROR ({category}):", e)
+        print(f"  ❌ RSS PARSE ERROR ({category}): {e}")
+        return category, []
+
+def _process_entry_and_collect(entry, category):
+    result = process_single_entry(entry, category=category)
+    if result:
+        with _all_rss_news_lock:
+            all_news.append(result)
+
+with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    feed_futures = {executor.submit(_fetch_rss_feed, pair): pair[0]
+                    for pair in RSS_FEEDS.items()}
+    entry_futures = []
+    for ff in as_completed(feed_futures):
+        category = feed_futures[ff]
+        try:
+            cat, entries = ff.result()
+            print(f"  📡 {cat}: {len(entries)} entries")
+            for entry in entries:
+                entry_futures.append(executor.submit(_process_entry_and_collect, entry, cat))
+        except Exception as e:
+            print(f"  ❌ RSS FEED ERROR ({category}): {e}")
+    for ef in as_completed(entry_futures):
+        try:
+            ef.result()
+        except Exception as e:
+            print("❌ ENTRY FUTURE ERROR:", e)
+
+print(f"  ✅ ALL RSS DONE — total: {len(all_news)}")
 
 # =========================================================
 # FETCH NEWS — LOCAL SCRAPERS (parallel)
