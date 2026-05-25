@@ -1343,14 +1343,14 @@ for row in filtered_news:
     _lang_instruction = (
         "भाषा: शुद्ध हिंदी — आसान, बोलचाल की हिंदी जो गाँव और कस्बे का आम इंसान भी समझ सके।"
         if _is_local_lang else
-        "Language: Hinglish — Hindi main likho lekin impactful English words naturally mix karo (jaise: viral, breaking, update, reaction, shocking). Avoid full English sentences."
+        "Language: Hindi main likho lekin impactful English words naturally mix karo (jaise: viral, breaking, update, reaction, shocking). Avoid full English sentences."
     )
 
     prompt = f"""
 Tu ek expert social media news writer hai jo Facebook aur Instagram ke liye viral, monetization-friendly content likhta hai.
 Tera channel hai "@karan_patel_kushinagar" — local Purvanchal ki awaaz, sach aur speed ke saath.
 
-{_lang_instruction}
+{_lang_instruction} but the article writting language will be always Hindi.
 
 STRICT OUTPUT FORMAT — bilkul is structure mein likho, koi extra heading mat add karo:
 
@@ -1370,18 +1370,14 @@ STRICT OUTPUT FORMAT — bilkul is structure mein likho, koi extra heading mat a
    - Facts, figures, naam, jagah — jo bhi available ho use karo
    - Dramatic but factual — koi exaggeration nahi
    - Story aise build karo ki reader end tak padhe
+   - Try to fetch more informative lines like include important lines ,fact ,data and all essential things.
 
-4. ⚡ KEY FACTS (exactly 4 bullet points)
-   - Har point alag information ho — main story repeat nahi
-   - Bold-worthy facts jo log screenshot karke share karein
-   - Format: • [fact]
-
-5. 💬 PUBLIC REACTION ANGLE (2-3 lines)
+4. 💬 PUBLIC REACTION ANGLE (2-3 lines)
    - Log is khabar par kya soch rahe hain / kya react kar rahe hain
    - 1 open-ended question jo comments drive kare
    - Example style: "Social media par log pooch rahe hain ki..."
 
-6. 📣 CALL TO ACTION (2 lines max)
+5. 📣 CALL TO ACTION (2 lines max)
    - Line 1: Engagement drive karo — share/tag/comment
    - Line 2: Follow karo @karan_patel_kushinagar — Facebook aur Instagram par
 
