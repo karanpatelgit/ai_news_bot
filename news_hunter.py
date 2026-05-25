@@ -137,21 +137,29 @@ if OPENROUTER_API_KEY:
 # MODELS
 # =========================================================
 
-GROQ_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+GROQ_MODELS = ["llama-3.1-8b-instant" ,"llama-3.3-70b-versatile" ]
 SAMBANOVA_MODELS = ["Meta-Llama-3.3-70B-Instruct"]
 HF_MODELS = ["meta-llama/Meta-Llama-3-8B-Instruct"]
 
 OPENROUTER_MODELS = [
-    "openrouter/auto",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemini-2.5-flash:free",
-    "google/gemini-2.5-pro:free",
-    "google/gemma-2-9b-it:free",
-    "mistralai/mistral-7b-instruct:free",
-    "microsoft/phi-3-medium-128k-instruct:free",
-    "qwen/qwen-2.5-72b-instruct:free",
-    "deepseek/deepseek-chat:free"
+    "openrouter/free",                                      # official free auto-router (always try first)
+    "deepseek/deepseek-v4-flash:free",                      # #1 quality, 1M context
+    "minimax/minimax-m2.5:free",                            # 205K ctx, strong reasoning
+    "google/gemma-4-31b-it:free",                           # Google, vision+tools, 262K ctx
+    "nvidia/nemotron-3-super-120b-a12b:free",               # NVIDIA 120B, 1M ctx
+    "openai/gpt-oss-120b:free",                             # OpenAI open weights 120B
+    "meta-llama/llama-3.3-70b-instruct:free",               # Meta Llama 70B
+    "nvidia/nemotron-3-nano-30b-a3b:free",                  # NVIDIA 30B, 256K ctx
+    "qwen/qwen3-coder:free",                                # Qwen3 coder, 1M ctx
+    "openai/gpt-oss-20b:free",                              # OpenAI open 20B, lighter
+    "z-ai/glm-4.5-air:free",                                # GLM 4.5 Air
+    "meta-llama/llama-3.2-3b-instruct:free",                # smallest, fastest fallback
+    "nousresearch/hermes-3-llama-3.1-405b:free",            # Hermes 405B
 ]
+ 
+# Per-provider cooldown tracking — if a provider 429s, skip it for N seconds
+_provider_cooldown = {}   # {"groq": <unix_timestamp_resume>, "sambanova": ..., etc.}
+_COOLDOWN_SECONDS  = 60   # wait 60 s before retrying a rate-limited provider
 
 # =========================================================
 # DUPLICATE DETECTION
@@ -737,61 +745,73 @@ print(f"\n✅ UNIQUE NEWS ITEMS AFTER DEDUP: {len(filtered_news)}")
 # =========================================================
 # AI GENERATION (WITH EXPONENTIAL BACKOFF FOR 429 ERRORS)
 # =========================================================
-
+ 
+def _is_on_cooldown(provider: str) -> bool:
+    """Return True if this provider is still in its rate-limit cooldown window."""
+    resume_at = _provider_cooldown.get(provider, 0)
+    if time.time() < resume_at:
+        remaining = int(resume_at - time.time())
+        print(f"⏳ [{provider.upper()}] on cooldown for {remaining}s more — skipping")
+        return True
+    return False
+ 
+def _set_cooldown(provider: str, seconds: int = _COOLDOWN_SECONDS):
+    _provider_cooldown[provider] = time.time() + seconds
+    print(f"🛑 [{provider.upper()}] rate-limited → cooldown {seconds}s")
+ 
+ 
 def generate_ai_response(prompt, headline="", category="", article_text="", link=""):
-
-    if groq_client:
+ 
+    # ── 1. GROQ ────────────────────────────────────────────────────────────
+    if groq_client and not _is_on_cooldown("groq"):
         for model_name in GROQ_MODELS:
-            for attempt in range(3):
-                try:
-                    print(f"🔥 USING GROQ: {model_name}")
-                    response = groq_client.chat.completions.create(
-                        model=model_name,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.8,
-                        max_tokens=2048
-                    )
-                    result = response.choices[0].message.content
-                    if result:
-                        return result
-                except Exception as e:
-                    err_str = str(e)
-                    if "429" in err_str or "rate_limit" in err_str:
-                        wait = 5 * (2 ** attempt)
-                        print(f"⚠️ GROQ 429 Rate Limit. Sleeping {wait}s...")
-                        time.sleep(wait)
-                    elif "402" in err_str:
-                        print("❌ GROQ 402 (Insufficient Credits) — skipping entirely.")
-                        break
-                    else:
-                        print("❌ GROQ FAILED:", e)
-                        break
-
-    if samba_client:
+            try:
+                print(f"🔥 USING GROQ: {model_name}")
+                response = groq_client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.8,
+                    max_tokens=2048
+                )
+                result = response.choices[0].message.content
+                if result:
+                    return result
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "rate_limit" in err_str.lower():
+                    _set_cooldown("groq")
+                    break                       # skip remaining groq models immediately
+                elif "402" in err_str:
+                    print("❌ GROQ 402 — no credits, skipping provider")
+                    _set_cooldown("groq", 3600) # skip for 1 hour
+                    break
+                else:
+                    print(f"❌ GROQ [{model_name}] FAILED:", e)
+ 
+    # ── 2. SAMBANOVA ───────────────────────────────────────────────────────
+    if samba_client and not _is_on_cooldown("sambanova"):
         for model_name in SAMBANOVA_MODELS:
-            for attempt in range(3):
-                try:
-                    print(f"🔥 USING SAMBANOVA: {model_name}")
-                    response = samba_client.chat.completions.create(
-                        model=model_name,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.8,
-                        max_tokens=2048
-                    )
-                    result = response.choices[0].message.content
-                    if result:
-                        return result
-                except Exception as e:
-                    err_str = str(e)
-                    if "429" in err_str or "rate_limit" in err_str:
-                        wait = 5 * (2 ** attempt)
-                        print(f"⚠️ SAMBANOVA 429 Rate Limit. Sleeping {wait}s...")
-                        time.sleep(wait)
-                    else:
-                        print("❌ SAMBANOVA FAILED:", e)
-                        break
-
-    if hf_client:
+            try:
+                print(f"🔥 USING SAMBANOVA: {model_name}")
+                response = samba_client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.8,
+                    max_tokens=2048
+                )
+                result = response.choices[0].message.content
+                if result:
+                    return result
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "rate_limit" in err_str.lower():
+                    _set_cooldown("sambanova")
+                    break
+                else:
+                    print(f"❌ SAMBANOVA [{model_name}] FAILED:", e)
+ 
+    # ── 3. HuggingFace ─────────────────────────────────────────────────────
+    if hf_client and not _is_on_cooldown("hf"):
         for model_name in HF_MODELS:
             try:
                 print(f"🔥 USING HF: {model_name}")
@@ -805,15 +825,28 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 if result:
                     return result
             except Exception as e:
-                if "402" in str(e):
-                    print("❌ HF FAILED: 402 Payment Required — skipping HF entirely.")
+                err_str = str(e)
+                if "402" in err_str:
+                    print("❌ HF 402 Payment Required — skipping provider")
+                    _set_cooldown("hf", 3600)
                     break
-                print("❌ HF FAILED:", e)
-
+                elif "429" in err_str or "rate_limit" in err_str.lower():
+                    _set_cooldown("hf")
+                    break
+                else:
+                    print(f"❌ HF [{model_name}] FAILED:", e)
+ 
+    # ── 4. OPENROUTER (free models, rotate through all) ────────────────────
     if not OPENROUTER_API_KEY:
         print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter")
+    elif _is_on_cooldown("openrouter"):
+        pass  # whole provider cooling down
     else:
+        or_model_cooldowns = {}  # track per-model 429s within this call
+ 
         for model_name in OPENROUTER_MODELS:
+            if or_model_cooldowns.get(model_name):
+                continue  # this specific model 429'd earlier this call
             try:
                 print(f"🔥 USING OPENROUTER: {model_name}")
                 or_resp = requests.post(
@@ -832,6 +865,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     },
                     timeout=60
                 )
+ 
                 if or_resp.status_code == 200:
                     or_data    = or_resp.json()
                     or_content = or_data["choices"][0]["message"]["content"]
@@ -839,41 +873,55 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         print(f"✅ OPENROUTER SUCCESS: {model_name}")
                         return or_content
                     else:
-                        print(f"⚠️ OPENROUTER empty response: {model_name}")
+                        print(f"⚠️ OPENROUTER empty response: {model_name} — trying next")
+ 
                 elif or_resp.status_code == 404:
-                    print(f"❌ OPENROUTER 404 (model removed): {model_name} — skipping")
+                    print(f"❌ OPENROUTER 404 — model removed: {model_name} — skipping")
+ 
+                elif or_resp.status_code == 402:
+                    # 402 on a :free model means the account has NO credits AND the model
+                    # is not truly free under that key. Skip this model only.
+                    err_body = or_resp.text[:200]
+                    print(f"❌ OPENROUTER 402 [{model_name}]: {err_body} — skipping model")
+ 
+                elif or_resp.status_code == 429:
+                    err_body = or_resp.text[:300]
+                    print(f"⚠️ OPENROUTER 429 [{model_name}]: {err_body}")
+                    or_model_cooldowns[model_name] = True   # mark this model, try next
+                    time.sleep(2)                           # tiny pause before next model
+ 
                 else:
-                    print(f"❌ OPENROUTER HTTP {or_resp.status_code}: {model_name}")
-                    print(or_resp.text[:300])
+                    print(f"❌ OPENROUTER HTTP {or_resp.status_code} [{model_name}]: {or_resp.text[:200]}")
+ 
             except Exception as e:
-                print(f"❌ OPENROUTER FAILED: {model_name} — {e}")
-
+                print(f"❌ OPENROUTER FAILED [{model_name}]: {e}")
+ 
     # SMART FALLBACK FORMATTER
     print("\n⚠️ USING SMART FALLBACK FORMATTER")
     try:
         if not headline or headline.strip() == "":
             title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
             headline = title_match.group(1).strip() if title_match else "Breaking News"
-
+ 
         if not category or category.strip() == "":
             category_match = re.search(r"category:\s*(.+)", prompt, re.IGNORECASE)
             category = category_match.group(1).strip() if category_match else "News"
-
+ 
         if not article_text or len(article_text.strip()) < 50:
             article_match = re.search(
                 r"(?:full article|article):\s*(.+?)(?:source link|link):",
                 prompt, re.DOTALL | re.IGNORECASE
             )
             article_text = article_match.group(1).strip() if article_match else headline
-
+ 
         if not link or link.strip() == "":
             link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
             link = link_match.group(1).strip() if link_match else ""
-
+ 
         clean_text     = re.sub(r'\s+', ' ', article_text).strip()
         sentences      = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
         important_lines = []
-
+ 
         for sentence in sentences:
             sentence = sentence.strip()
             if any(x in sentence.lower() for x in [
@@ -885,7 +933,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 important_lines.append(sentence)
             if len(important_lines) >= 10:
                 break
-
+ 
         if len(important_lines) < 10:
             chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
             for chunk in chunks:
@@ -893,7 +941,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     important_lines.append(chunk)
                 if len(important_lines) >= 10:
                     break
-
+ 
         backup_points = [
             "इस महत्वपूर्ण घटनाक्रम के बाद संबंधित विभागों और प्रशासनिक टीमों को अलर्ट मोड पर रखा गया है।",
             "ग्राउंड जीरो पर मौजूद सुरक्षा बल और जांच एजेंसियां मामले की हर एक कड़ी को बारीकी से खंगाल रही हैं।",
@@ -905,10 +953,10 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
             if len(important_lines) >= 10:
                 break
             important_lines.append(pt)
-
+ 
         summary  = "\n\n".join([f"• {line}" for line in important_lines[:12]])
         hashtags = f"#{category.replace(' ', '')} #BreakingNews #IndiaNews #ViralNews #FlashNews"
-
+ 
         return f"""
 🔥 BREAKING NEWS
 📰 {headline}
