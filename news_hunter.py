@@ -331,7 +331,7 @@ def generate_image_huggingface(prompt, save_path):
     print("🎨 Trying HuggingFace FLUX...")
 
     API_URL = (
-        "https://api-inference.huggingface.co/models/"
+        "https://router.huggingface.co/hf-inference/models/"
         "black-forest-labs/FLUX.1-schnell"
     )
 
@@ -343,38 +343,44 @@ def generate_image_huggingface(prompt, save_path):
         "inputs": prompt
     }
 
-    try:
+   for attempt in range(3):
 
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json=payload,
-            timeout=180
-        )
-
-        if response.status_code != 200:
-            print(f"❌ HF Error {response.status_code}")
-            print(response.text[:300])
-            return None
-
-        image = Image.open(io.BytesIO(response.content))
-
-        image = image.resize((1080, 1350))
-
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-
-        image.save(save_path)
-
-        print(f"✅ HuggingFace image saved: {save_path}")
-
-        return save_path
-
-    except Exception as e:
-
-        print(f"❌ HuggingFace failed: {e}")
-
-        return None
-
+        try:
+    
+            response = requests.post(
+                API_URL,
+                headers=headers,
+                json=payload,
+                timeout=180
+            )
+    
+            if response.status_code == 200:
+    
+                image = Image.open(
+                    io.BytesIO(response.content)
+                )
+    
+                image = image.resize((1080, 1350))
+    
+                image.save(save_path)
+    
+                print(f"✅ HuggingFace image saved")
+    
+                return save_path
+    
+            else:
+    
+                print(
+                    f"❌ HF Error {response.status_code}"
+                )
+    
+                print(response.text[:300])
+    
+        except Exception as e:
+    
+            print(f"⚠️ HF attempt {attempt+1} failed: {e}")
+    
+            time.sleep(5)
 
 # =========================================================
 # OPENROUTER IMAGE GEN
