@@ -63,12 +63,20 @@ jobs:
             requests \
             python-dotenv \
             openai \
-            huggingface_hub \
             trafilatura \
             beautifulsoup4 \
             lxml \
             playwright
 
+      # ===================================================
+      # INSTALL HUGGINGFACE IMAGE DEPENDENCIES
+      # ===================================================
+
+      - name: Install HuggingFace Image Dependencies
+        run: |
+
+          pip install pillow
+          pip install huggingface_hub
       # ===================================================
       # INSTALL PLAYWRIGHT BROWSER
       # ===================================================
