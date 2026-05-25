@@ -20,8 +20,6 @@ import random
 import io
 import urllib.parse
 
-from PIL import Image
-
 # =========================================================
 # LOAD ENV VARIABLES
 # =========================================================
@@ -43,9 +41,6 @@ BOT_TOKEN          = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID            = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 TELEGRAM_CHAT_IDS  = os.environ.get("TELEGRAM_CHAT_IDS", "").strip()
 
-CANVA_EMAIL        = os.environ.get("CANVA_EMAIL", "").strip()
-CANVA_PASSWORD     = os.environ.get("CANVA_PASSWORD", "").strip()
-
 print("=" * 50)
 print("🔑 KEY STATUS:")
 print(f"   GROQ       : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
@@ -55,7 +50,6 @@ print(f"   OPENROUTER : {'✅ SET — ' + OPENROUTER_API_KEY[:8] + '...' if OPEN
 print(f"   BOT_TOKEN  : {'✅ SET' if BOT_TOKEN else '❌ MISSING'}")
 print(f"   CHAT_ID    : {'✅ SET' if CHAT_ID else '❌ MISSING'}")
 print(f"   TELEG_CHAT : {'✅ SET' if TELEGRAM_CHAT_IDS else '❌ MISSING'}")
-print(f"   CANVA      : {'✅ SET' if CANVA_EMAIL and CANVA_PASSWORD else '❌ MISSING'}")
 print("=" * 50)
 
 # =========================================================
@@ -69,6 +63,18 @@ LOCAL_NEWS_BONUS      = 2.5
 SCRAPER_TIME_WINDOW_H = 10
 SCRAPER_MAX_PER_SITE  = 8
 RSS_MAX_PER_FEED      = 20
+
+# Personal Branding Info — used in image prompt generator
+PERSONAL_BRAND = {
+    "name":        "Karan Patel",
+    "handle":      "@karan_patel_kushinagar",
+    "instagram":   "https://www.instagram.com/karan_patel_kushinagar",
+    "youtube":     "https://youtube.com/@karan_patel_kushinagar",
+    "facebook":    "https://www.facebook.com/share/1D627R2qFV/",
+    "tagline":     "कुशीनगर की आवाज़ | सच्ची खबर, सबसे पहले",
+    "logo_desc":   "minimalist 'KP' monogram logo in gold on dark background",
+    "color_theme": "deep navy blue (#0D1B2A) with gold (#D4AF37) accents and white text",
+}
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -147,8 +153,6 @@ OPENROUTER_MODELS = [
     "deepseek/deepseek-chat:free"
 ]
 
-
-
 # =========================================================
 # DUPLICATE DETECTION
 # =========================================================
@@ -157,7 +161,7 @@ def is_similar(a, b, threshold=0.7):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= threshold
 
 # =========================================================
-# TELEGRAM
+# TELEGRAM — TEXT ONLY
 # =========================================================
 
 def _parse_chat_ids(raw: str):
@@ -187,338 +191,6 @@ def send_telegram_message(message):
                 print(f"✅ TELEGRAM SENT -> chat_id={target_chat_id}")
             except Exception as e:
                 print(f"❌ TELEGRAM ERROR -> chat_id={target_chat_id}:", e)
-
-# =========================================================
-# SEND TELEGRAM PHOTO
-# =========================================================
-
-def send_telegram_photo(photo_path, caption):
-
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-
-    chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
-
-    if not chat_ids and CHAT_ID:
-        chat_ids = [CHAT_ID]
-
-    if not chat_ids:
-        print("❌ NO CHAT IDs FOUND")
-        return
-
-    for chat_id in chat_ids:
-
-        try:
-
-            with open(photo_path, "rb") as photo:
-
-                response = requests.post(
-                    url,
-                    data={
-                        "chat_id": chat_id,
-                        "caption": caption[:1024]
-                    },
-                    files={
-                        "photo": photo
-                    },
-                    timeout=60
-                )
-
-            print(f"✅ PHOTO SENT -> {chat_id}")
-
-        except Exception as e:
-
-            print(f"❌ TELEGRAM PHOTO ERROR ({chat_id}):", e)
-
-# =========================================================
-# ██████████████████████████████████████████████████████
-# IMAGE GENERATION PIPELINE
-# Priority 1 → Hugging Face
-# Priority 2 → Canva AI (Playwright headless fallback)
-# Priority 3 → Pollinations.AI (last resort, free)
-# ██████████████████████████████████████████████████████
-# =========================================================
-
-# =========================================================
-# PROMPT BUILDER
-# =========================================================
-
-def build_image_prompt(headline, category, ai_result):
-
-    summary = ai_result[:500] if ai_result else headline
-
-    prompt = f"""
-Create an ultra realistic Indian breaking news Instagram poster.
-
-HEADLINE:
-{headline}
-
-CATEGORY:
-{category}
-
-SUMMARY:
-{summary}
-
-STYLE:
-- Indian TV news style
-- Ultra realistic
-- Cinematic
-- Dramatic newsroom lighting
-- Red black yellow palette
-- Breaking news aesthetic
-- Realistic Indian people
-- Hyper detailed
-- Professional typography area
-- Viral social media look
-- Mobile friendly
-- Emotional storytelling
-- High contrast
-- 4:5 Instagram portrait
-
-SPECIAL CONTEXT:
-- Crime → police, sirens, investigation
-- Politics → leaders, parliament, crowd
-- Disaster → realistic destruction scene
-- International → geopolitical newsroom
-
-IMPORTANT:
-- No watermark
-- No text glitches
-- Professional news quality
-- Realistic faces
-- Studio quality
-"""
-
-    return prompt
-
-
-# =========================================================
-# HUGGINGFACE FLUX
-# FREE + HIGH QUALITY
-# =========================================================
-
-def generate_image_huggingface(prompt, save_path):
-
-    if not HF_TOKEN:
-        print("⚠️ HF_TOKEN missing")
-        return None
-
-    print("🎨 Trying HuggingFace FLUX...")
-
-    API_URL = (
-        "https://router.huggingface.co/hf-inference/models/"
-        "black-forest-labs/FLUX.1-schnell"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {HF_TOKEN}"
-    }
-
-    payload = {
-        "inputs": prompt
-    }
-
-    # =====================================================
-    # RETRY LOOP
-    # =====================================================
-
-    for attempt in range(3):
-
-        try:
-
-            response = requests.post(
-                API_URL,
-                headers=headers,
-                json=payload,
-                timeout=180
-            )
-
-            # =================================================
-            # SUCCESS
-            # =================================================
-
-            if response.status_code == 200:
-
-                image = Image.open(
-                    io.BytesIO(response.content)
-                )
-
-                # Instagram 4:5 resize
-                image = image.resize((1080, 1350))
-
-                os.makedirs(
-                    os.path.dirname(save_path),
-                    exist_ok=True
-                )
-
-                image.save(save_path)
-
-                print(f"✅ HuggingFace image saved: {save_path}")
-
-                return save_path
-
-            # =================================================
-            # API ERROR
-            # =================================================
-
-            else:
-
-                print(
-                    f"❌ HF Error {response.status_code}"
-                )
-
-                print(response.text[:300])
-
-        except Exception as e:
-
-            print(
-                f"⚠️ HF attempt {attempt + 1} failed: {e}"
-            )
-
-            time.sleep(5)
-
-    # =====================================================
-    # TOTAL FAILURE
-    # =====================================================
-
-    print("❌ HuggingFace failed after 3 attempts")
-
-    return None
-
-# =========================================================
-# CANVA AI
-# =========================================================
-
-def generate_image_canva(prompt, save_path):
-
-    try:
-
-        from canva_ai import generate_news_poster
-
-        print("🎨 Trying Canva AI...")
-
-        result = generate_news_poster(prompt)
-
-        if result and os.path.exists(result):
-
-            with open(result, "rb") as src:
-                data = src.read()
-
-            with open(save_path, "wb") as dst:
-                dst.write(data)
-
-            print(f"✅ Canva image saved")
-
-            return save_path
-
-    except Exception as e:
-
-        print(f"❌ Canva failed: {e}")
-
-    return None
-
-# =========================================================
-# POLLINATIONS AI
-# =========================================================
-
-def generate_image_pollinations(prompt, save_path):
-
-    try:
-
-        print("🎨 Trying Pollinations...")
-
-        encoded = urllib.parse.quote(prompt[:500])
-
-        url = (
-            f"https://image.pollinations.ai/prompt/{encoded}"
-            f"?width=1080"
-            f"&height=1350"
-            f"&model=flux"
-            f"&enhance=true"
-        )
-
-        response = requests.get(url, timeout=180)
-
-        if response.status_code == 200:
-
-            with open(save_path, "wb") as f:
-                f.write(response.content)
-
-            print(f"✅ Pollinations saved")
-
-            return save_path
-
-    except Exception as e:
-
-        print(f"❌ Pollinations failed: {e}")
-
-    return None
-
-
-# =========================================================
-# MASTER IMAGE GENERATOR
-# =========================================================
-
-def generate_news_image(
-
-    headline,
-    category,
-    ai_result,
-    article_index
-
-):
-
-    os.makedirs("downloads", exist_ok=True)
-
-    save_path = f"downloads/news_{article_index}.png"
-
-    prompt = build_image_prompt(
-        headline,
-        category,
-        ai_result
-    )
-
-    print(f"\n🖼️ GENERATING IMAGE #{article_index}")
-
-    # =====================================================
-    # PRIORITY 1 — HUGGINGFACE
-    # =====================================================
-
-    result = generate_image_huggingface(
-        prompt,
-        save_path
-    )
-
-    if result:
-        return result
-
-
-    # =====================================================
-    # PRIORITY 3 — CANVA
-    # =====================================================
-
-    result = generate_image_canva(
-        prompt,
-        save_path
-    )
-
-    if result:
-        return result
-
-    # =====================================================
-    # PRIORITY 4 — POLLINATIONS
-    # =====================================================
-
-    result = generate_image_pollinations(
-        prompt,
-        save_path
-    )
-
-    if result:
-        return result
-
-    print("❌ ALL IMAGE METHODS FAILED")
-
-    return None
 
 # =========================================================
 # URL HELPERS
@@ -742,7 +414,7 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
     return results
 
 # =========================================================
-# RSS 
+# RSS FEEDS
 # =========================================================
 
 RSS_FEEDS = {
@@ -774,7 +446,6 @@ RSS_FEEDS = {
         "https://news.google.com/rss/search?q=उत्तर+प्रदेश&hl=hi-IN&gl=IN&ceid=IN:hi",
     "GNews_Purvanchal_HI":
         "https://news.google.com/rss/search?q=पूर्वांचल&hl=hi-IN&gl=IN&ceid=IN:hi",
-    
     "India":
         "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
     "India Politics":
@@ -807,7 +478,6 @@ RSS_FEEDS = {
         "https://news.google.com/rss/search?q=narendra+modi&hl=en-IN&gl=IN&ceid=IN:en",
     "India_Weather":
         "https://news.google.com/rss/search?q=india+weather+flood+rain&hl=en-IN&gl=IN&ceid=IN:en",
-    
     "AmarUjala_UP_RSS":     "https://www.amarujala.com/rss/uttar-pradesh.xml",
     "Jagran_UP_RSS":        "https://www.jagran.com/rss/news-uttar-pradesh.xml",
     "Hindustan_UP_RSS":     "https://feed.livehindustan.com/rss/3130",
@@ -1241,6 +911,171 @@ Political Toxicity: 0/10
 """
 
 # =========================================================
+# AI IMAGE PROMPT GENERATOR
+# Produces a ready-to-paste Midjourney / DALL-E / Ideogram
+# prompt for a 1080 × 1350 px professional news post.
+# Sent as a SEPARATE Telegram message chunk after the article.
+# =========================================================
+
+def generate_image_prompt(
+    headline: str,
+    category: str,
+    article_text: str,
+    final_score: float,
+    emotion_score: int,
+    short_link: str,
+) -> str:
+    """
+    Uses the AI cascade to write a detailed image-generation prompt.
+    Returns the raw prompt string (not an image).
+    """
+
+    # ── Extract a 1–2 sentence news summary for the prompt ──────────────
+    clean_text = re.sub(r'\s+', ' ', article_text or headline).strip()
+    sentences  = re.split(r'(?<=[.!?।])\s+', clean_text)
+    summary_for_prompt = " ".join(sentences[:2])[:300]
+
+    # ── Decide mood / colour palette based on category ──────────────────
+    mood_map = {
+        "Crime":         ("dark red warning atmosphere, crime scene yellow tape",         "crimson and dark red"),
+        "Breaking":      ("urgent breaking news red-alert broadcast style",               "red, white, electric blue"),
+        "Defense":       ("military patriotic Indian tricolor",                           "saffron, white, green, navy"),
+        "India Politics":("formal political rally stage with Indian flags",               "deep blue, saffron, white"),
+        "India Pakistan":("tense border atmosphere, Indian Army soldiers",                "olive green, desert beige"),
+        "Sports":        ("vibrant stadium crowd energy, dynamic action lighting",        "gold, electric blue, white"),
+        "Entertainment": ("Bollywood glam spotlight, glamorous neon lights",              "pink, gold, deep purple"),
+        "Health":        ("clean medical professional environment, calming",              "mint green, white, light blue"),
+        "Business":      ("corporate futuristic city skyline financial district",         "navy blue, gold, silver"),
+        "Technology":    ("futuristic digital circuit glowing neon cyber aesthetic",      "electric blue, neon green, black"),
+        "World":         ("global world map hologram geopolitical",                       "blue, silver, white"),
+        "Kushinagar":    ("rural UP landscape golden fields sunrise, village community",  "golden yellow, green, earthy brown"),
+        "Gorakhpur":     ("city of Gorakhpur urban streetscape, Gorakhnath temple hint",  "saffron, maroon, white"),
+    }
+
+    # Fall back: check for partial category matches
+    mood_desc, palette = "dramatic news broadcast professional studio", "deep navy, gold, white"
+    for key, (m, p) in mood_map.items():
+        if key.lower() in category.lower():
+            mood_desc, palette = m, p
+            break
+
+    # ── Emotional intensity cue ──────────────────────────────────────────
+    if emotion_score >= 8:
+        intensity = "high-drama cinematic lighting, bold shadows, urgent tension"
+    elif emotion_score >= 5:
+        intensity = "balanced editorial lighting, confident and impactful"
+    else:
+        intensity = "clean calm informational style, professional neutrality"
+
+    # ── Build the meta-prompt for the AI to refine ──────────────────────
+    meta_prompt = f"""
+You are a world-class creative director specialising in viral social media news post design.
+Generate ONE highly detailed image-generation prompt for Midjourney / DALL-E 3 / Ideogram
+to create a 1080 × 1350 px portrait professional news post image.
+
+NEWS CONTEXT:
+- Headline  : {headline}
+- Category  : {category}
+- Summary   : {summary_for_prompt}
+- Mood cue  : {mood_desc}
+- Palette   : {palette}
+- Intensity : {intensity}
+
+PERSONAL BRANDING to embed visually in the prompt:
+- Creator name  : {PERSONAL_BRAND["name"]}
+- Handle        : {PERSONAL_BRAND["handle"]}
+- Tagline       : {PERSONAL_BRAND["tagline"]}
+- Logo hint     : {PERSONAL_BRAND["logo_desc"]}
+- Color theme   : {PERSONAL_BRAND["color_theme"]}
+
+MANDATORY DESIGN REQUIREMENTS you must include in the prompt:
+1. Canvas: portrait 1080×1350 px, no cropping
+2. Top strip: bold "BREAKING NEWS" or category label in white on coloured ribbon
+3. Centre: dramatic visual scene that represents the news (photorealistic, no text in the scene)
+4. Lower third: dark gradient overlay with bold Devanagari + English headline text placeholder
+5. Bottom bar: brand colours ({PERSONAL_BRAND["color_theme"]}) with watermark "{PERSONAL_BRAND["handle"]}" and tagline
+6. Typography style: bold condensed sans-serif for English, Noto Sans Devanagari style for Hindi
+7. Style: ultra-HD photorealistic editorial magazine cover, 8K quality, professional post-processing
+8. NO fake logos, NO real brand marks, NO copyrighted symbols
+
+Return ONLY the image prompt — no explanation, no markdown, no preamble. 
+The prompt must be one long paragraph of 120–180 words.
+""".strip()
+
+    print("🎨 GENERATING AI IMAGE PROMPT...")
+    image_prompt = generate_ai_response(
+        prompt=meta_prompt,
+        headline=headline,
+        category=category,
+        article_text=article_text,
+        link=""
+    )
+
+    # ── Fallback static prompt if AI fails ──────────────────────────────
+    if not image_prompt or len(image_prompt.strip()) < 60:
+        image_prompt = (
+            f"Ultra-HD photorealistic professional social media news post, portrait 1080x1350px. "
+            f"Top: bold red ribbon strip with white text 'BREAKING NEWS — {category}'. "
+            f"Centre: dramatic {mood_desc} scene representing the news event, cinematic {intensity}, "
+            f"colour palette of {palette}. Lower third: dark semi-transparent gradient overlay with "
+            f"bold white condensed headline placeholder text. "
+            f"Bottom bar in {PERSONAL_BRAND['color_theme']} colours featuring watermark "
+            f"'{PERSONAL_BRAND['handle']}' in gold and tagline '{PERSONAL_BRAND['tagline']}' "
+            f"in small white text. {PERSONAL_BRAND['logo_desc']} in bottom-right corner. "
+            f"Style: editorial magazine cover quality, 8K, professional post-processing, no fake logos."
+        )
+
+    return image_prompt.strip()
+
+
+def build_image_prompt_message(
+    headline: str,
+    category: str,
+    article_text: str,
+    final_score: float,
+    emotion_score: int,
+    short_link: str,
+    article_idx: int,
+) -> str:
+    """
+    Wraps the raw image prompt in a formatted Telegram message block.
+    """
+    prompt_text = generate_image_prompt(
+        headline=headline,
+        category=category,
+        article_text=article_text,
+        final_score=final_score,
+        emotion_score=emotion_score,
+        short_link=short_link,
+    )
+
+    message = f"""
+🎨 AI IMAGE PROMPT — Article #{article_idx}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📐 Target Size : 1080 × 1350 px (Portrait / Instagram Post)
+📂 Category    : {category}
+📰 Headline    : {headline}
+📈 Viral Score : {final_score}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🖼️ PASTE THIS PROMPT IN MIDJOURNEY / DALL-E 3 / IDEOGRAM:
+
+{prompt_text}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 TIPS:
+• Midjourney   → paste prompt + add  --ar 4:5 --v 6 --style raw
+• DALL-E 3     → paste as-is in ChatGPT image mode
+• Ideogram     → paste prompt, select "Realistic" style, 1080×1350
+• Canva AI     → use as text-to-image prompt, set canvas 1080×1350
+
+🔗 News Link: {short_link}
+📸 {PERSONAL_BRAND["instagram"]}
+""".strip()
+
+    return message
+
+# =========================================================
 # KEYWORD BANKS
 # =========================================================
 
@@ -1258,39 +1093,15 @@ LOCAL_WORDS = [
     "कैम्पियरगंज", "पिपराइच", "गोला", "खजनी", "बांसगांव", "सहजनवा", "बड़हलगंज", "कौड़ीराम", "चरगाँव",
     "kasya", "bodh gaya", "buddha", "parnirvana", "thuthibari", "sonauli", "chhitauni", "salempur",
     "barhaj", "rudrapur", "gaura", "bhatni", "lar", "patherdeva", "tarkulwa", "desahi", "baitalpur",
-    "gauri bazar", "bhaluani", "kaptanganj", "siswa", "nichlaul", "mithauna", "धानी", "सिसवा", "निचलौल",
-    "मीठाउना", "ठूठीबारी", "सनौली", "छितौनी", "सलेमपुर", "बरहज", "रुद्रपुर", "भाटपार", "भटनी", "लार",
+    "gauri bazar", "bhaluani", "kaptanganj", "siswa", "nichlaul", "mithauna",
     "yogi", "adityanath", "yogi adityanath", "gorakhnath", "peeth", "mahant", "योगी", "आदित्यनाथ",
     "गोरखनाथ", "पीठ", "महंत", "up police", "gkp", "stf", "upstf", "dial 112", "daroga", "thana",
     "kotwali", "chowki", "sp office", "dm office", "vda", "gda", "nagarpalika", "pradhan", "bdo",
-    "दारोगा", "थाना", "कोतवाली", "चौकी", "प्रधान", "बीडीओ", "सिपाही", "दबंग", "मुख्तार", "अंसारी",
+    "दारोगा", "थाना", "कोतवाली", "चौकी", "प्रधान", "बीडीओ",
     "bhojpuri", "bhojpuriya", "purvanchali", "ghaghra", "gandak", "rapti", "rohin", "ami", "kuwano",
     "sarayu", "boating accident", "floods", "purvanchal expressway", "gorakhpur link", "aiims gorakhpur",
     "brd medical college", "mmmut", "ddu", "kushinagar international airport", "buddha relics",
     "भोजपुरी", "पूर्वांचली", "घाघरा", "गंडक", "राप्ती", "सरयू", "बाढ़", "एक्सप्रेसवे", "एम्स", "बीआरडी",
-    "menhdawal", "khalilabad", "hainsarbazar", "bangaon", "harraiya", "captainganj", "rudhauli",
-    "bhanpur", "itwa", "domariaganj", "shohratgarh", "naugarh", "bansi", "alapur", "jalalpur",
-    "tanda", "akbarpur", "bhiti", "katehari", "maharajganj", "sagri", "gopalpur", "azamgarh city",
-    "nizamabad", "phoolpur", "didarganj", "lalganj", "mehnagar", "mubarakpur", "ghosi", "madhuban",
-    "mohammadabad", "kopaganj", "rasra", "bansdih", "sikanderpur", "phephna", "bairia", "zahoorabad",
-    "saidpur", "zamania", "muhammadabad", "jakhanian", "kerakat", "machhlishahr", "mariahu", "shahganj",
-    "mungra badshahpur", "malhani", "pindra", "shivpur", "cantt", "ajagara", "rohania", "sevapuri",
-    "खलीलाबाद", "हरैया", "रुधौली", "इटवा", "डुमरियागंज", "शोहरतगढ़", "नौगढ़", "बांसी", "जलालपुर",
-    "टांडा", "अकबरपुर", "सगरी", "निज़ामबाद", "फूलपुर", "दीदारगंज", "लालगंज", "मऊनाथ", "घोषी", "मधुबन",
-    "रसड़ा", "बांसडीह", "सिकंदरपुर", "फेफना", "बैरिया", "जमानिया", "जखनिया", "केराकत", "मछलीशहर", "मड़ियाहू",
-    "asuran", "golghar", "buxipur", "mohaddipur", "taramandal", "medical road", "singharia",
-    "bargadwa", "shahpur", "tiwaripur", "rajendra nagar", "shastri nagar", "civil lines", "naushad",
-    "transport nagar", "gita press", "surajkund", "gorakhnath temple", "ramgarhtal", "leela",
-    "असुरन", "गोलघर", "बक्शीपुर", "मोहद्दीपुर", "तारामंडल", "बरगदवा", "शाहपुर", "तिवारीपुर", "नौसड़",
-    "गीता प्रेस", "सूरजकुंड", "रामगढ़ताल", "गोरखनाथ मंदिर", "कौवाबाग", "पादरी बाजार", "झरना टोला",
-    "kasya raj", "matha kaur", "ramabhar", "stupa", "wat thai", "linh son", "burmese temple",
-    "tibetan monastery", "shahi masjid", "kurmaghat", "narayani river", "choti gandak", "bansi river",
-    "ghaghra bridge", "dohrighat", "barhaj ghat", "ayodhya ram mandir route", "purvanchal handloom",
-    "terracotta", "bhathat", "jangal kauria", "pali", "sahjanwa industrial", "gida", "unwal",
-    "piprauli", "khorabar", "bramhpur", "gayanpur", "gopalpur chowk", "paniyara", "partawal",
-    "shyamdeurawa", "bhagwanpur", "bridgemanganj", "kolhui", "purandarpur", "lakhima", "sonauli border",
-    "belahiya", "valmiki nagar", "bagaha", "narkatiaganj", "chanpatia", "bettiah", "motihari",
-    "बेलहिया", "बाल्मीकि नगर", "बगाहा", "नरकटियागंज", "बेतिया", "मोतीहारी", "पनियरा", "परतावल", "श्यामदेउरवा"
 ]
 
 HIGH_PRIORITY_KEYWORDS = [
@@ -1301,66 +1112,32 @@ HIGH_PRIORITY_KEYWORDS = [
     "संसद", "लोकसभा", "राज्यसभा", "मंत्रिमंडल", "कैबिनेट", "केंद्र सरकार", "आरएसएस", "मोहन भागवत",
     "rahul gandhi", "priyanka gandhi", "sonia gandhi", "congress", "inc", "kharge", "akhilesh",
     "yadav", "dimple yadav", "kejriwal", "aap", "mamata banerjee", "tmc", "stalin", "nitish kumar",
-    "jdu", "rjd", "tejashwi", "lalu yadav", "mayawati", "bsp", "india alliance", "mva", "sharad pawar",
-    "राहुल गांधी", "प्रियंका", "कांग्रेस", "खड़गे", "अखिलेश यादव", "डिंपल", "केजरीवाल", "आप", "ममता",
-    "नीतीश कुमार", "तेजस्वी", "लालू यादव", "मायावती", "बसपा", "सपा", "विपक्ष", "इंडिया गठबंधन",
-    "election", "chunav", "voting", "matdan", "evm", "vvpat", "booth capturing", "exit poll",
-    "opinion poll", "by-poll", "voter id", "nomination", "rally", "jan sabha", "code of conduct",
-    "चुनाव", "मतदान", "वोटिंग", "ईवीएम", "एग्जिट पोल", "नामांकन", "रैली", "जनसभा", "आचार संहिता",
-    "police", "arrest", "court", "supreme court", "high court", "cj", "ed", "cbi", "raid", "encounter",
-    "jail", "custody", "bailable", "non-bailable", "fir", "charge sheet", "summons", "interrogation",
-    "stf", "nia", "income tax", "it raid", "judgement", "verdict", "anticipatory bail", "warrant",
-    "पुलिस", "गिरफ्तार", "कोर्ट", "सुप्रीम कोर्ट", "हाई कोर्ट", "जज", "ईडी", "सीबीआई", "छापा", "रेड",
-    "एनकाउंटर", "जेल", "हिरासत", "जमानत", "एफआईआर", "चार्जशीट", "समन", "पूछताछ", "एनआईए", "वारंट",
-    "pakistan", "china", "army", "attack", "war", "israel", "gaza", "iran", "border", "loc", "lac",
-    "iaf", "navy", "surgical strike", "drone", "missile", "agniveer", "agnipath", "iaf fighter",
-    "sukhoi", "rafale", "drdo", "indian army", "bsh", "crpf", "bsf", "itbp", "nsg", "terrorist",
-    "encounter", "infiltration", "commanders", "nuclear", "submarines", "aircraft carrier",
-    "चीन", "सेना", "हमला", "युद्ध", "इजरायल", "गाजा", "ईरान", "बॉर्डर", "एलओसी", "राफेल",
-    "अग्निवीर", "सर्जिकल स्ट्राइक", "ड्रोन", "मिसाइल", "आतंकवादी", "घुसपैठ", "परमाणु", "फौजी", "जवान",
-    "trump", "donald trump", "putin", "russia", "biden", "america", "us news", "white house",
-    "kremlin", "pentagon", "united nations", "unsc", "nato", "zelensky", "ukraine war", "xi jinping",
-    "beijing", "washington", "london", "downing street", "bbc", "reuters", "al jazeera",
-    "ट्रम्प", "पुतिन", "रूस", "बिडेन", "अमेरिका", "व्हाइट हाउस", "नाटो", "यूक्रेन", "शी जिनपिंग",
+    "jdu", "rjd", "tejashwi", "lalu yadav", "mayawati", "bsp", "india alliance",
+    "राहुल गांधी", "प्रियंका", "कांग्रेस", "खड़गे", "अखिलेश यादव", "केजरीवाल", "ममता",
+    "election", "chunav", "voting", "matdan", "evm", "vvpat",
+    "police", "arrest", "court", "supreme court", "high court", "ed", "cbi", "raid", "encounter",
+    "jail", "custody", "fir", "charge sheet", "warrant",
+    "पुलिस", "गिरफ्तार", "कोर्ट", "सुप्रीम कोर्ट", "हाई कोर्ट", "ईडी", "सीबीआई", "छापा", "रेड",
+    "pakistan", "china", "army", "attack", "war", "israel", "gaza", "border", "loc", "lac",
+    "iaf", "navy", "surgical strike", "drone", "missile", "agniveer",
+    "चीन", "सेना", "हमला", "युद्ध", "इजरायल", "गाजा", "बॉर्डर", "राफेल", "ड्रोन", "मिसाइल",
+    "trump", "putin", "russia", "america", "united nations", "nato",
     "gst", "income tax slab", "budget", "rbi", "repo rate", "inflation", "gdp", "share market",
-    "nifty", "sensex", "sebi", "ipo", "crypto", "bitcoin", "vande bharat", "bullet train", "nhai",
-    "highway", "toll plaza", "ayushman bharat", "pm kisan", "ration card", "freebie", "subsidy",
-    "बजट", "महंगाई", "शेयर बाजार", "सेंसेक्स", "निफ्टी", "क्रिप्टो", "वंदे भारत", "हाइवे", "टोल प्लाजा",
-    "neet", "paper leak", "scam", "railway", "rrb", "ssc", "exam cancel", "leak", "fraud", "bribe",
-    "cgl", "upsc", "paper लीक", "घोटाला", "nta", "answer key", "cutoff", "result out", "cheating",
-    "dummy candidate", "solvers gang", "marks rigging", "re-exam", "grace marks", "uproar",
-    "नीट", "पेपर लीक", "घोटाला", "रेलवे", "परीक्षा रद्द", "धांधली", "रिजल्ट", "धोखाधड़ी", "रिश्वत"
+    "nifty", "sensex", "neet", "paper leak", "scam", "railway", "exam cancel",
+    "नीट", "पेपर लीक", "घोटाला", "रेलवे", "परीक्षा रद्द",
 ]
 
 EMOTIONAL_WORDS = [
-    "shock", "fear", "warning", "danger", "viral", "anger", "violence", "protest", "ebola", "virus",
-    "outbreak", "alert", "breaking", "urgent", "hazard", "panic", "expose", "mystery", "miracle",
-    "tragedy", "disaster", "catastrophe", "scandal", "shameful", "horrific", "brutal", "deadly",
-    "conspiracy", "covert", "hidden camera", "caught on camera", "live stream", "unbelievable",
-    "bizarre", "myth", "haunted", "incident", "accident", "clash", "riot", "tension", "stampede",
-    "सावधान", "बड़ी खबर", "खुलासा", "हादसा", "मौत", "हड़कंप", "सनसनी", "खौफ", "शर्मनाक", "चमत्कार",
-    "धोखा", "तबाही", "खतरा", "चेतावनी", "लाइव वीडियो", "सच्चाई", "मच गया बवाल", "रोंगटे खड़े", "दहशत",
-    "सीसीटीवी", "शर्मसार", "भयंकर", "दर्दनाक", "बड़ी लापरवाही", "सनसनीखेज", "कांप उठी रूह", "देखें वीडियो",
-    "खौफनाक", "दिल दहला देने वाला", "अंधविश्वास", "बवाल", "हंगामा", "आक्रोश", "गुस्सा", "मातम", "चीख-पुकार",
-    "खूनी खेल", "वारदात", "भंडाफोड़", "काली करतूत", "सच्चा चेहरा", "गुप्त", "रहस्य", "अजीबोगरीब",
-    "क्राइम", "मर्डर", "हादसा", "भूकंप", "आग लगी", "लूट", "गैंग", "बलात्कार", "गैंगस्टर", "माफिया",
-    "बदमाश", "गोलीबारी", "मर्डर केस", "फिरौती", "किडनैपिंग", "अपहरण", "डकैती", "चोरी", "फिरौती",
-    "शूटर", "सुपारी", "शव बरामद", "लाश", "हत्याकांड", "गोली मारकर हत्या", "चाकूबाजी", "एसिड अटैक",
-    "रेप", "गैंगरेप", "उत्पीड़न", "घूसखोर", "रंगे हाथ", "ब्लैकमेल", "साइबर ठगी", "हनीट्रैप", "फर्जीवाड़ा",
-    "ठग", "जालसाज", "माफिया राज", "बुलडोजर", "कुर्की", "गैंगवार", "हिस्ट्रीशीटर", "इनामी बदमाश",
-    "blast", "explosion", "fire", "derailment", "train crash", "plane crash", "collision", "head-on",
-    "hit and run", "drowning", "lightning", "earthquake", "cloudburst", "landslide", "heatwave",
-    "cylinder blast", "short circuit", "building collapse", "bridge collapse", "poisonous", "gas leak",
-    "धमाका", "विस्फोट", "आगजनी", "ट्रेन हादसा", "पटरी से उतरी", "टक्कर", "हिट एंड रन", "डूबने से मौत",
-    "आकाशीय बिजली", "बादल फटा", "लैंडस्लाइड", "सिलेंडर ब्लास्ट", "शॉर्ट सर्किट", "जहरीली गैस", "दम घुटने",
-    "trending", "viral reel", "facebook trend", "instagram viral", "twitter fight", "boycott",
-    "trolled", "public bashing", "slapped", "abused", "viral audio", "leaked video", "crying video",
-    "suicide note", "last video", "stunt video", "speeding car", "fight video", "road rage",
-    "drunk driving", "high speed", "reckless", "suspension", "terminated", "action taken",
-    "ट्रेंडिंग", "वायरल रील", "ट्विटर वॉर", "बॉयकाट", "ट्रोल", "पब्लिक ने पीटा", "थप्पड़", "गालीगलौज",
-    "वायरल ऑडियो", "लीक वीडियो", "रोते हुए", "स्टंट वीडियो", "रोड रेज", "नशे में धुत", "सस्पेंड", "बर्खास्त",
-    "emotional", "heartbreaking", "justice", "cheated", "exposed", "fake news", "mafia encounter",
-    "भावुक", "दिल टूट गया", "न्याय", "इंसाफ", "धोखेबाज", "फर्जी वीडियो", "सच्चा खुलासा", "कच्चा चिट्ठा"
+    "shock", "fear", "warning", "danger", "viral", "anger", "violence", "protest", "alert",
+    "breaking", "urgent", "panic", "expose", "mystery", "miracle", "tragedy", "disaster",
+    "catastrophe", "scandal", "shameful", "horrific", "brutal", "deadly", "conspiracy",
+    "सावधान", "बड़ी खबर", "खुलासा", "हादसा", "मौत", "हड़कंप", "सनसनी", "खौफ", "शर्मनाक",
+    "धोखा", "तबाही", "खतरा", "चेतावनी", "सच्चाई", "मच गया बवाल", "दहशत", "भयंकर", "दर्दनाक",
+    "blast", "explosion", "fire", "derailment", "train crash", "collision", "drowning",
+    "earthquake", "cloudburst", "landslide", "heatwave", "building collapse",
+    "धमाका", "विस्फोट", "आगजनी", "ट्रेन हादसा", "टक्कर", "डूबने से मौत", "भूकंप", "बाढ़",
+    "trending", "viral reel", "boycott", "trolled", "viral audio", "leaked video",
+    "ट्रेंडिंग", "वायरल रील", "बॉयकाट", "वायरल ऑडियो", "लीक वीडियो",
 ]
 
 # =========================================================
@@ -1463,7 +1240,7 @@ for row in filtered_news:
 
     prompt = f"""
 You are an elite viral news content writer, Facebook monetization strategist, and social media journalist in Hindi Language.
-Create a high-engagement, monetization-focused Hindi social media article optimized for social networks.Sentence repeatition is strictly prohibited.
+Create a high-engagement, monetization-focused Hindi social media article optimized for social networks. Sentence repetition is strictly prohibited.
 
 Structure the output as follows:
 Viral headline: Emotional, curiosity-based, Opening hook (2–3 lines) with Grabs attention.
@@ -1518,7 +1295,7 @@ Source Link: {link}
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
-        print(f"🚀 FINAL SCORE PASSED ({final_score}) — GENERATING IMAGE + SENDING TELEGRAM")
+        print(f"🚀 FINAL SCORE PASSED ({final_score}) — SENDING TELEGRAM")
 
         cleaned_link = clean_url(link)
         short_link   = shorten_url(cleaned_link)
@@ -1526,19 +1303,7 @@ Source Link: {link}
         article_idx += 1
 
         # =================================================
-        # AUTO IMAGE GENERATION
-        # OpenRouter → Canva → Pollinations
-        # =================================================
-
-        image_path = generate_news_image(
-            headline=headline,
-            category=category,
-            ai_result=ai_result,
-            article_index=article_idx
-        )
-
-        # =================================================
-        # BUILD TELEGRAM MESSAGE
+        # CHUNK 1 — FULL ARTICLE (text)
         # =================================================
 
         telegram_message = f"""
@@ -1558,43 +1323,39 @@ Source Link: {link}
 {short_link}
 
 Follow us on:
-📸 Instagram: https://www.instagram.com/karan_patel_kushinagar  
-▶️ YouTube: https://youtube.com/@karan_patel_kushinagar
-📘 Facebook: https://www.facebook.com/share/1D627R2qFV/
-"""
+📸 Instagram: {PERSONAL_BRAND["instagram"]}
+▶️ YouTube: {PERSONAL_BRAND["youtube"]}
+📘 Facebook: {PERSONAL_BRAND["facebook"]}
+""".strip()
+
+        send_telegram_message(telegram_message)
+        print(f"✅ CHUNK 1 (ARTICLE) SENT — Article #{article_idx}")
+
+        time.sleep(TELEGRAM_SLEEP_TIME)
 
         # =================================================
-        # SEND TO TELEGRAM
-        # If image generated → send as photo with caption
-        # If image failed   → send as text message
+        # CHUNK 2 — AI IMAGE PROMPT
+        # Generates a professional 1080×1350 px prompt
+        # with news context + personal branding embedded
         # =================================================
 
-        if image_path and os.path.exists(image_path):
+        print(f"🎨 GENERATING IMAGE PROMPT for article #{article_idx}...")
+        image_prompt_message = build_image_prompt_message(
+            headline=headline,
+            category=category,
+            article_text=article_text,
+            final_score=final_score,
+            emotion_score=emotion_score,
+            short_link=short_link,
+            article_idx=article_idx,
+        )
 
-            # Send image with full article as caption
-            # Telegram caption limit is 1024 chars so send article as separate message
-            photo_caption = (
-                f"🖼️ AI News Poster — Article #{article_idx}\n\n"
-                f"📰 {headline}\n"
-                f"📂 {category}\n"
-                f"📈 Viral Score: {final_score}\n"
-                f"🔗 {short_link}\n\n"
-                f"📸 Instagram: https://www.instagram.com/karan_patel_kushinagar\n"
-                f"▶️ YouTube: https://youtube.com/@karan_patel_kushinagar\n"
-                f"📘 Facebook: https://www.facebook.com/share/1D627R2qFV/"
-            )
+        send_telegram_message(image_prompt_message)
+        print(f"✅ CHUNK 2 (IMAGE PROMPT) SENT — Article #{article_idx}")
 
-            send_telegram_photo(image_path, photo_caption)
-            print(f"✅ IMAGE SENT for article #{article_idx}")
-
-            # Then send full article text separately
-            send_telegram_message(telegram_message)
-            print(f"✅ ARTICLE TEXT SENT for article #{article_idx}")
-
-        else:
-            # No image — just send text
-            send_telegram_message(telegram_message)
-            print(f"✅ ARTICLE (TEXT ONLY, image failed) SENT for article #{article_idx}")
+        # =================================================
+        # STORE RESULT
+        # =================================================
 
         results.append({
             "source":         source,
@@ -1608,10 +1369,8 @@ Follow us on:
             "trending_score": trending_score,
             "final_score":    final_score,
             "ai_result":      ai_result,
-            "image_generated": bool(image_path and os.path.exists(image_path))
         })
 
-        time.sleep(TELEGRAM_SLEEP_TIME)
         time.sleep(AI_SLEEP_TIME)
 
     except Exception as e:
@@ -1629,7 +1388,5 @@ if not results_df.empty:
     results_df.to_csv(csv_path, index=False)
     print(f"\n✅ CSV SAVED: {csv_path}")
     print(f"✅ TOTAL SENT: {len(results_df)}")
-    images_ok = results_df["image_generated"].sum() if "image_generated" in results_df.columns else 0
-    print(f"🖼️  IMAGES GENERATED: {images_ok}/{len(results_df)}")
 else:
     print("\n❌ NO HIGH VIRAL NEWS FOUND")
