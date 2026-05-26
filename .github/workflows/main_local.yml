@@ -1,4 +1,4 @@
-name: News Hunter Bot
+name: Local News Hunter Bot
 
 on:
   workflow_dispatch:
