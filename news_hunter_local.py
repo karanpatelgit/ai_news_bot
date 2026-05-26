@@ -1204,7 +1204,7 @@ for row in filtered_news:
     raw_score = round(raw_score, 2)
     print(f"📊 PRE SCORE: {raw_score}")
 
-    if raw_score < 8.0:
+    if raw_score < 2.0:
         print(f"⏭️ SKIPPED LOW PRE-SCORE: {headline} ({raw_score})")
         continue
 
@@ -1230,17 +1230,17 @@ Tera channel hai "@karan_patel_kushinagar" — local Purvanchal ki awaaz, sach a
 
 STRICT OUTPUT FORMAT — bilkul is structure mein likho, koi extra heading mat add karo:
 
-1. 🔥 VIRAL HEADLINE (1 line)
+ 🔥 VIRAL HEADLINE (1 line)
    - Emotional + curiosity gap wali — reader ko rukne par majboor kare
    - Number ya shocking word se shuru karo jab possible ho
    - Max 12 words
 
-2. 🪝 OPENING HOOK (2-3 lines)
+ 🪝 OPENING HOOK (2-3 lines)
    - Pehli line mein sabse badi baat — reader scroll nahi karega
    - Ek aisa angle jo dusre news pages ne nahi pakda
    - Directly baat pe aao, "aaj hum baat karenge" BILKUL MAT LIKHO
 
-3. 📰 MAIN STORY (250-300 words)
+ 📰 MAIN STORY (250-300 words)
    - Short paragraphs — max 3 lines each, Facebook mobile readers ke liye
    - Har paragraph mein ek nayi information
    - Facts, figures, naam, jagah — jo bhi available ho use karo
@@ -1248,16 +1248,16 @@ STRICT OUTPUT FORMAT — bilkul is structure mein likho, koi extra heading mat a
    - Story aise build karo ki reader end tak padhe
    - Try to fetch more informative lines like include important lines ,fact ,data and all essential things.
 
-4. 💬 PUBLIC REACTION ANGLE (2-3 lines)
+💬 PUBLIC REACTION ANGLE (2-3 lines)
    - Log is khabar par kya soch rahe hain / kya react kar rahe hain
    - 1 open-ended question jo comments drive kare
    - Example style: "Social media par log pooch rahe hain ki..."
 
-5. 📣 CALL TO ACTION (2 lines max)
+📣 CALL TO ACTION (2 lines max)
    - Line 1: Engagement drive karo — share/tag/comment
    - Line 2: Follow karo @karan_patel_kushinagar — Facebook aur Instagram par
 
-7. #️⃣ HASHTAGS (1 line, 5-8 tags)
+#️⃣ HASHTAGS (1 line, 5-8 tags)
    - Mix: 3 broad (#BreakingNews #Viral) + 3 topic-specific + 2 local (#Kushinagar #Purvanchal)
    - No spaces inside hashtags
 
@@ -1315,7 +1315,7 @@ QUALITY RULES — इन्हें तोड़ा तो content reject ह�
 
         final_score = round(final_score, 2)
 
-        if final_score < 8.5:
+        if final_score < 4.0:
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
