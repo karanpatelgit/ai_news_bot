@@ -6,9 +6,9 @@ on:
   schedule:
     - cron: "0 1 * * *"
     - cron: "0 4 * * *"
-    - cron: "0 7 * * *"
-    - cron: "0 11 * * *"
-    - cron: "0 14 * * *"
+    - cron: "50 6 * * *"
+    - cron: "20 14 * * *"
+    - cron: "50 15 * * *"
 
 permissions:
   contents: read
