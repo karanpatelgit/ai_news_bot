@@ -434,15 +434,6 @@ RSS_FEEDS = {
     "Gorakhpur_HI":
         "https://news.google.com/rss/search?q=गोरखपुर&hl=hi-IN&gl=IN&ceid=IN:hi",
 
-    "Deoria_HI":
-        "https://news.google.com/rss/search?q=देवरिया&hl=hi-IN&gl=IN&ceid=IN:hi",
-
-    "Maharajganj_HI":
-        "https://news.google.com/rss/search?q=महराजगंज&hl=hi-IN&gl=IN&ceid=IN:hi",
-
-    "Basti_HI":
-        "https://news.google.com/rss/search?q=बस्ती+उत्तर+प्रदेश&hl=hi-IN&gl=IN&ceid=IN:hi",
-
     "Purvanchal_HI":
         "https://news.google.com/rss/search?q=पूर्वांचल&hl=hi-IN&gl=IN&ceid=IN:hi",
 
