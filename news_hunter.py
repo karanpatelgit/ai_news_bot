@@ -1280,7 +1280,7 @@ for row in filtered_news:
     raw_score = round(raw_score, 2)
     print(f"📊 PRE SCORE: {raw_score}")
 
-    if raw_score < 11.0:
+    if raw_score < 9.0:
         print(f"⏭️ SKIPPED LOW PRE-SCORE: {headline} ({raw_score})")
         continue
 
