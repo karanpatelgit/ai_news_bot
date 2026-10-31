@@ -231,18 +231,31 @@ def send_telegram_photo_bytes(image_bytes: bytes, caption: str = ""):
 # =========================================================
 # MULTI-PROVIDER AUTHENTICATED IMAGE PIPELINE (NEW)
 # =========================================================
+CATEGORY_DISPLAY_MAP = {
+    "GNews_Kushinagar_HI": "KUSHINAGAR NEWS",
+    "GNews_Gorakhpur_HI":  "GORAKHPUR NEWS",
+    "GNews_Purvanchal_HI": "PURVANCHAL UPDATES",
+    "AmarUjala_UP":        "UTTAR PRADESH",
+    "Bhaskar_UP":          "UP BREAKING",
+    "Hindustan_UP":        "UTTAR PRADESH",
+    "Jagran_UP":           "UP NEWS",
+    "News18_UP":           "UP BREAKING",
+    "TV9_UP":              "UTTAR PRADESH",
+    "AajTak_UP":           "UP BREAKING",
+    "UPTak":               "UP TAK NEWS",
+    "GorakhpurLive":       "GORAKHPUR LIVE",
+    "PurvanchalNews":      "PURVANCHAL NEWS",
+    "GaonConnection":      "RURAL INDIA",
+}
 
 def generate_image_bytes(prompt: str) -> bytes:
     """
-    Cascades through authenticated Open-Source Image APIs (FLUX.1-schnell & SDXL):
-    1. HuggingFace InferenceClient / Serverless API (Uses HF_TOKEN)
-    2. Cloudflare Workers AI (Uses CF_ACCOUNT_ID + CF_API_TOKEN — 10,000 free neurons/day)
-    3. Together AI Free FLUX Endpoint (Uses TOGETHER_API_KEY)
-    4. Fallback: Scraped OG Image from the news article itself (handled in caller)
+    Uses the updated router.huggingface.co endpoint + 1024x1024 standard resolution
+    so FLUX.1-schnell and SDXL never reject the dimensions.
     """
     clean_prompt = prompt.replace("\n", " ").strip()
 
-    # ── 1. HUGGING FACE SERVERLESS INFERENCE (FLUX.1-schnell & SDXL) ──────
+    # ── 1. HUGGING FACE ROUTER API (Updated 2026 Endpoint) ────────────────
     if HF_TOKEN and not _is_on_cooldown("hf_img"):
         hf_image_models = [
             "black-forest-labs/FLUX.1-schnell",
@@ -254,34 +267,34 @@ def generate_image_bytes(prompt: str) -> bytes:
                 print(f"🎨 [HF IMAGE] Generating via {model}...")
                 if hf_client:
                     try:
-                        pil_img = hf_client.text_to_image(
-                            clean_prompt,
+                        # Initialize with hf-inference provider explicitly
+                        img_client = InferenceClient(provider="hf-inference", api_key=HF_TOKEN)
+                        pil_img = img_client.text_to_image(
+                            prompt=clean_prompt,
                             model=model,
                             width=1024,
-                            height=1280
+                            height=1024
                         )
                         buf = io.BytesIO()
                         pil_img.save(buf, format="JPEG", quality=92)
                         img_bytes = buf.getvalue()
-                        if len(img_bytes) > 2000:
+                        if len(img_bytes) > 5000:
                             print(f"✅ [HF IMAGE] Success via InferenceClient ({model})")
                             return img_bytes
                     except Exception as client_err:
-                        print(f"⚠️ [HF Client] {model} fallback to raw REST: {client_err}")
+                        print(f"⚠️ [HF Client] {model} fallback to router REST: {client_err}")
 
-                # Direct REST call fallback for Hugging Face
-                api_url = f"https://api-inference.huggingface.co/models/{model}"
+                # Updated Hugging Face Router URL (replaces deprecated api-inference.huggingface.co)
+                api_url = f"https://router.huggingface.co/hf-inference/models/{model}"
                 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-                payload = {
-                    "inputs": clean_prompt,
-                    "parameters": {"width": 1024, "height": 1280}
-                }
+                payload = {"inputs": clean_prompt}
                 resp = requests.post(api_url, headers=headers, json=payload, timeout=45)
-                if resp.status_code == 200 and len(resp.content) > 2000:
-                    print(f"✅ [HF IMAGE] Success via REST ({model})")
+                
+                if resp.status_code == 200 and len(resp.content) > 5000:
+                    print(f"✅ [HF IMAGE] Success via Router REST ({model})")
                     return resp.content
                 elif resp.status_code in (402, 429):
-                    print(f"⚠️ [HF IMAGE] Rate/Quota limit ({resp.status_code}) on {model}")
+                    print(f"⚠️ [HF IMAGE] Quota/Rate limit ({resp.status_code}) on {model}")
                     if resp.status_code == 402:
                         _set_cooldown("hf_img", 1800)
                         break
@@ -308,133 +321,150 @@ def generate_image_bytes(prompt: str) -> bytes:
                 if resp.status_code == 200:
                     content_type = resp.headers.get("Content-Type", "")
                     if "application/json" in content_type:
-                        data    = resp.json()
-                        b64_img = data.get("result", {}).get("image")
+                        b64_img = resp.json().get("result", {}).get("image")
                         if b64_img:
                             print(f"✅ [CLOUDFLARE AI] Success ({cf_model})")
                             return base64.b64decode(b64_img)
-                    elif len(resp.content) > 2000:
-                        print(f"✅ [CLOUDFLARE AI] Binary image success ({cf_model})")
+                    elif len(resp.content) > 5000:
+                        print(f"✅ [CLOUDFLARE AI] Binary success ({cf_model})")
                         return resp.content
-                elif resp.status_code == 429:
-                    _set_cooldown("cf_img", 300)
-                    break
-                else:
-                    print(f"⚠️ [CLOUDFLARE AI] HTTP {resp.status_code}: {resp.text[:150]}")
             except Exception as e:
                 print(f"❌ [CLOUDFLARE AI] Error ({cf_model}): {e}")
 
-    # ── 3. TOGETHER AI (FLUX.1-schnell-Free endpoint) ─────────────────────
-    if TOGETHER_API_KEY and not _is_on_cooldown("together_img"):
-        try:
-            print("🎨 [TOGETHER AI] Generating via black-forest-labs/FLUX.1-schnell-Free...")
-            tg_url  = "https://api.together.xyz/v1/images/generations"
-            headers = {
-                "Authorization": f"Bearer {TOGETHER_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "black-forest-labs/FLUX.1-schnell-Free",
-                "prompt": clean_prompt,
-                "width": 1024,
-                "height": 1280,
-                "steps": 4,
-                "n": 1,
-                "response_format": "b64_json"
-            }
-            resp = requests.post(tg_url, headers=headers, json=payload, timeout=45)
-            if resp.status_code == 200:
-                b64_img = resp.json().get("data", [{}])[0].get("b64_json")
-                if b64_img:
-                    print("✅ [TOGETHER AI] Image generated successfully")
-                    return base64.b64decode(b64_img)
-            elif resp.status_code == 429:
-                _set_cooldown("together_img", 120)
-            else:
-                print(f"⚠️ [TOGETHER AI] HTTP {resp.status_code}: {resp.text[:150]}")
-        except Exception as e:
-            print(f"❌ [TOGETHER AI] Error: {e}")
-
     return None
+
 
 def fetch_article_og_image(article_url: str) -> bytes:
     """
-    Open-source scraper fallback: If all AI image APIs hit quota limits,
-    extract the high-res OpenGraph (og:image) press photo from the news link.
+    Scrapes the press photo from the article, strictly blocking Google News icons
+    and generic site placeholders.
     """
+    # Block un-redirected Google News URLs immediately
+    if "news.google.com" in article_url or "google.com" in article_url:
+        print("⚠️ [OG:IMAGE] Skipping Google News URL to avoid Google 'G' logo")
+        return None
+
     try:
         resp = requests.get(article_url, headers=random_headers(), timeout=10)
         if resp.status_code != 200:
             return None
-        soup    = BeautifulSoup(resp.text, "lxml")
-        og_tag  = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"})
+        soup   = BeautifulSoup(resp.text, "lxml")
+        og_tag = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"})
         if og_tag and og_tag.get("content"):
             img_url = og_tag["content"].strip()
+            
+            # Reject Google icons, favicons, and default logos
+            bad_tokens = ["google", "gstatic", "googleusercontent", "logo", "favicon", "default", "placeholder"]
+            if any(b in img_url.lower() for b in bad_tokens):
+                print(f"⚠️ [OG:IMAGE] Rejected generic/logo image URL: {img_url}")
+                return None
+
             img_resp = requests.get(img_url, headers=random_headers(), timeout=12)
-            if img_resp.status_code == 200 and len(img_resp.content) > 5000:
-                print("✅ [OG:IMAGE FALLBACK] Extracted real press photo from article")
+            if img_resp.status_code == 200 and len(img_resp.content) > 15000:
+                print("✅ [OG:IMAGE FALLBACK] Extracted authentic press photo from article")
                 return img_resp.content
     except Exception as e:
         print(f"⚠️ [OG:IMAGE FALLBACK] Failed: {e}")
     return None
 
-def apply_brand_overlay(image_bytes: bytes, category: str = "BREAKING NEWS") -> bytes:
+
+def apply_brand_overlay(image_bytes: bytes, category: str = "BREAKING NEWS", headline: str = "") -> bytes:
     """
-    Uses Pillow to crop/fit image to 1080x1350 (4:5 portrait) and stamps
-    a professional Navy & Gold branding bar at the bottom + category badge at top.
+    Renders a broadcast-grade 1080x1350 Hindi News Card using Playwright Chromium
+    (so Devanagari matras and dynamically-sized category ribbons render flawlessly),
+    with a Pillow fallback.
     """
+    clean_cat = CATEGORY_DISPLAY_MAP.get(category, category.replace("_", " ").upper())
+
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        target_w, target_h = 1080, 1350
+        from playwright.sync_api import sync_playwright
+        b64_bg = base64.b64encode(image_bytes).decode("utf-8")
 
-        # Resize & center-crop to 1080x1350 portrait
-        src_ratio = img.width / img.height
-        tgt_ratio = target_w / target_h
-        if src_ratio > tgt_ratio:
-            new_h = target_h
-            new_w = int(new_h * src_ratio)
-        else:
-            new_w = target_w
-            new_h = int(new_w / src_ratio)
-
-        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        left = (new_w - target_w) // 2
-        top  = (new_h - target_h) // 2
-        img  = img.crop((left, top, left + target_w, top + target_h))
-
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@700;900&family=Montserrat:wght@800&display=swap" rel="stylesheet">
+        <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{
+                width: 1080px; height: 1350px; overflow: hidden;
+                font-family: 'Noto Sans Devanagari', sans-serif;
+                background: #09121c; position: relative;
+            }}
+            .bg-img {{
+                width: 1080px; height: 1255px;
+                object-fit: cover; object-position: center;
+                display: block;
+            }}
+            .top-badge {{
+                position: absolute; top: 36px; left: 36px;
+                background: #C8102E; color: #FFFFFF;
+                padding: 12px 28px; font-family: 'Montserrat', sans-serif;
+                font-size: 26px; font-weight: 800; letter-spacing: 1.5px;
+                border-bottom: 5px solid #D4AF37; border-radius: 4px;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.55);
+                display: inline-block;
+            }}
+            .lower-third {{
+                position: absolute; bottom: 95px; left: 0; width: 1080px;
+                background: linear-gradient(to top, rgba(9,18,28,0.98) 0%, rgba(9,18,28,0.88) 70%, rgba(9,18,28,0.0) 100%);
+                padding: 90px 42px 28px 42px;
+            }}
+            .headline-box {{
+                border-left: 8px solid #C8102E;
+                padding-left: 22px; color: #FFFFFF;
+                font-size: 44px; font-weight: 900; line-height: 1.32;
+                text-shadow: 0 4px 12px rgba(0,0,0,0.8);
+            }}
+            .footer {{
+                position: absolute; bottom: 0; left: 0;
+                width: 1080px; height: 95px;
+                background: #0D1B2A; border-top: 6px solid #D4AF37;
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 0 38px;
+            }}
+            .brand-handle {{
+                color: #D4AF37; font-family: 'Montserrat', sans-serif;
+                font-size: 26px; font-weight: 800;
+            }}
+            .brand-sub {{
+                color: #FFFFFF; font-size: 22px; font-weight: 700;
+            }}
+        </style>
+        </head>
+        <body>
+            <img class="bg-img" src="data:image/jpeg;base64,{b64_bg}" />
+            <div class="top-badge">🔴 {clean_cat}</div>
+            <div class="lower-third">
+                <div class="headline-box">{headline}</div>
+            </div>
+            <div class="footer">
+                <div class="brand-handle">{PERSONAL_BRAND['handle']} | {PERSONAL_BRAND['name']}</div>
+                <div class="brand-sub">कुशीनगर और पूर्वांचल की आवाज़</div>
+            </div>
+        </body>
+        </html>
+        """
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1080, "height": 1350})
+            page.set_content(html_content, wait_until="networkidle", timeout=15000)
+            final_bytes = page.screenshot(type="jpeg", quality=92)
+            browser.close()
+            return final_bytes
+    except Exception as e:
+        print(f"⚠️ Playwright card render failed ({e}) — using Pillow fallback...")
+        # Pillow fallback with dynamic badge width so text never overflows
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((1080, 1350))
         draw = ImageDraw.Draw(img)
-
-        # Load font (falls back cleanly if DejaVu/Noto isn't found)
-        try:
-            font_bold  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
-        except Exception:
-            font_bold  = ImageFont.load_default()
-            font_small = ImageFont.load_default()
-
-        # Top Category Ribbon
-        cat_label = f" {category.upper()} "
-        draw.rectangle([(30, 30), (380, 85)], fill=(200, 16, 46))
-        draw.rectangle([(30, 81), (380, 85)], fill=(212, 175, 55))
-        draw.text((45, 42), cat_label[:22], fill=(255, 255, 255), font=font_bold)
-
-        # Bottom Branding Bar (#0D1B2A Navy + #D4AF37 Gold accent line)
-        bar_h = 95
-        draw.rectangle([(0, target_h - bar_h), (target_w, target_h)], fill=(13, 27, 42))
-        draw.rectangle([(0, target_h - bar_h), (target_w, target_h - bar_h + 6)], fill=(212, 175, 55))
-
-        brand_left  = f"{PERSONAL_BRAND['handle']}  |  {PERSONAL_BRAND['name']}"
-        brand_right = "Kushinagar & Purvanchal Updates"
-        draw.text((30, target_h - bar_h + 22), brand_left, fill=(212, 175, 55), font=font_bold)
-        draw.text((30, target_h - bar_h + 58), brand_right, fill=(255, 255, 255), font=font_small)
-
+        badge_w = max(320, len(clean_cat) * 20 + 60)
+        draw.rectangle([(30, 30), (30 + badge_w, 85)], fill=(200, 16, 46))
+        draw.text((45, 45), clean_cat, fill=(255, 255, 255))
         out = io.BytesIO()
         img.save(out, format="JPEG", quality=92)
         return out.getvalue()
-    except Exception as e:
-        print(f"⚠️ Brand overlay error (returning original image): {e}")
-        return image_bytes
-
 # =========================================================
 # URL HELPERS
 # =========================================================
