@@ -19,6 +19,7 @@ from difflib import SequenceMatcher
 import random
 import io
 import urllib.parse
+from PIL import Image, ImageDraw, ImageFont
 
 # =========================================================
 # LOAD ENV VARIABLES
@@ -36,6 +37,9 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 GROQ_API_KEY       = os.environ.get("GROQ_API_KEY", "").strip()
 SAMBANOVA_API_KEY  = os.environ.get("SAMBANOVA_API_KEY", "").strip()
 HF_TOKEN           = os.environ.get("HF_TOKEN", "").strip()
+CF_ACCOUNT_ID      = os.environ.get("CF_ACCOUNT_ID", "").strip()
+CF_API_TOKEN       = os.environ.get("CF_API_TOKEN", "").strip()
+TOGETHER_API_KEY   = os.environ.get("TOGETHER_API_KEY", "").strip()
 
 BOT_TOKEN          = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 CHAT_ID            = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
@@ -47,6 +51,8 @@ print(f"   GROQ       : {'✅ SET' if GROQ_API_KEY else '❌ MISSING'}")
 print(f"   SAMBANOVA  : {'✅ SET' if SAMBANOVA_API_KEY else '❌ MISSING'}")
 print(f"   HF_TOKEN   : {'✅ SET' if HF_TOKEN else '❌ MISSING'}")
 print(f"   OPENROUTER : {'✅ SET — ' + OPENROUTER_API_KEY[:8] + '...' if OPENROUTER_API_KEY else '❌ MISSING'}")
+print(f"   CLOUDFLARE : {'✅ SET' if (CF_ACCOUNT_ID and CF_API_TOKEN) else '⚠️ OPTIONAL (Not Set)'}")
+print(f"   TOGETHER   : {'✅ SET' if TOGETHER_API_KEY else '⚠️ OPTIONAL (Not Set)'}")
 print(f"   BOT_TOKEN  : {'✅ SET' if BOT_TOKEN else '❌ MISSING'}")
 print(f"   CHAT_ID    : {'✅ SET' if CHAT_ID else '❌ MISSING'}")
 print(f"   TELEG_CHAT : {'✅ SET' if TELEGRAM_CHAT_IDS else '❌ MISSING'}")
@@ -64,7 +70,7 @@ SCRAPER_TIME_WINDOW_H = 10
 SCRAPER_MAX_PER_SITE  = 8
 RSS_MAX_PER_FEED      = 20
 
-# Personal Branding Info — used in image prompt generator
+# Personal Branding Info — used in image prompt generator & watermark
 PERSONAL_BRAND = {
     "name":        "Karan Patel",
     "handle":      "@karan_patel_kushinagar",
@@ -156,7 +162,7 @@ OPENROUTER_MODELS = [
     "meta-llama/llama-3.2-3b-instruct:free",                # smallest, fastest fallback
     "nousresearch/hermes-3-llama-3.1-405b:free",            # Hermes 405B
 ]
- 
+
 # Per-provider cooldown tracking — if a provider 429s, skip it for N seconds
 _provider_cooldown = {}   # {"groq": <unix_timestamp_resume>, "sambanova": ..., etc.}
 _COOLDOWN_SECONDS  = 60   # wait 60 s before retrying a rate-limited provider
@@ -169,47 +175,8 @@ def is_similar(a, b, threshold=0.7):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= threshold
 
 # =========================================================
-# TELEGRAM — TEXT ONLY
+# TELEGRAM — TEXT & PHOTO SENDERS
 # =========================================================
-import urllib.parse
-
-def get_free_image_url(prompt: str) -> str:
-    """Primary: Pollinations.ai (FLUX model, open-source, no key needed)"""
-    clean_prompt = prompt.replace("\n", " ").strip()
-    encoded_prompt = urllib.parse.quote(clean_prompt)
-    return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1350&model=flux&nologo=true"
-
-def get_hf_fallback_image(prompt: str):
-    """Fallback: Hugging Face SDXL using your existing HF_TOKEN"""
-    if not HF_TOKEN:
-        return None
-    try:
-        url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-        response = requests.post(url, headers=headers, json={"inputs": prompt}, timeout=30)
-        if response.status_code == 200:
-            return response.content
-    except Exception as e:
-        print("❌ HF Image Fallback Error:", e)
-    return None
-
-def send_telegram_photo(photo_data):
-    """Handles both URL strings (Pollinations) and raw bytes (Hugging Face)"""
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-    chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
-    if not chat_ids and CHAT_ID:
-        chat_ids = [CHAT_ID]
-        
-    for target_chat_id in chat_ids:
-        try:
-            if isinstance(photo_data, str) and photo_data.startswith("http"):
-                requests.post(url, data={"chat_id": target_chat_id, "photo": photo_data}, timeout=30)
-            else:
-                files = {"photo": ("image.jpg", photo_data, "image/jpeg")}
-                requests.post(url, data={"chat_id": target_chat_id}, files=files, timeout=30)
-            print(f"✅ TELEGRAM PHOTO SENT -> {target_chat_id}")
-        except Exception as e:
-            print(f"❌ TELEGRAM PHOTO ERROR -> {target_chat_id}:", e)
 
 def _parse_chat_ids(raw: str):
     if not raw:
@@ -238,6 +205,235 @@ def send_telegram_message(message):
                 print(f"✅ TELEGRAM SENT -> chat_id={target_chat_id}")
             except Exception as e:
                 print(f"❌ TELEGRAM ERROR -> chat_id={target_chat_id}:", e)
+
+def send_telegram_photo_bytes(image_bytes: bytes, caption: str = ""):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
+    if not chat_ids and CHAT_ID:
+        chat_ids = [CHAT_ID]
+
+    if not chat_ids:
+        print("❌ TELEGRAM PHOTO ERROR: No CHAT_ID(s) configured")
+        return
+
+    for target_chat_id in chat_ids:
+        try:
+            files = {"photo": ("news_post.jpg", image_bytes, "image/jpeg")}
+            data  = {"chat_id": target_chat_id, "caption": caption[:1024]}
+            resp  = requests.post(url, data=data, files=files, timeout=40)
+            if resp.status_code == 200:
+                print(f"📸 TELEGRAM PHOTO SENT -> chat_id={target_chat_id}")
+            else:
+                print(f"⚠️ TELEGRAM PHOTO HTTP {resp.status_code}: {resp.text[:150]}")
+        except Exception as e:
+            print(f"❌ TELEGRAM PHOTO ERROR -> chat_id={target_chat_id}: {e}")
+
+# =========================================================
+# MULTI-PROVIDER AUTHENTICATED IMAGE PIPELINE (NEW)
+# =========================================================
+
+def generate_image_bytes(prompt: str) -> bytes:
+    """
+    Cascades through authenticated Open-Source Image APIs (FLUX.1-schnell & SDXL):
+    1. HuggingFace InferenceClient / Serverless API (Uses HF_TOKEN)
+    2. Cloudflare Workers AI (Uses CF_ACCOUNT_ID + CF_API_TOKEN — 10,000 free neurons/day)
+    3. Together AI Free FLUX Endpoint (Uses TOGETHER_API_KEY)
+    4. Fallback: Scraped OG Image from the news article itself (handled in caller)
+    """
+    clean_prompt = prompt.replace("\n", " ").strip()
+
+    # ── 1. HUGGING FACE SERVERLESS INFERENCE (FLUX.1-schnell & SDXL) ──────
+    if HF_TOKEN and not _is_on_cooldown("hf_img"):
+        hf_image_models = [
+            "black-forest-labs/FLUX.1-schnell",
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            "ByteDance/SDXL-Lightning"
+        ]
+        for model in hf_image_models:
+            try:
+                print(f"🎨 [HF IMAGE] Generating via {model}...")
+                if hf_client:
+                    try:
+                        pil_img = hf_client.text_to_image(
+                            clean_prompt,
+                            model=model,
+                            width=1024,
+                            height=1280
+                        )
+                        buf = io.BytesIO()
+                        pil_img.save(buf, format="JPEG", quality=92)
+                        img_bytes = buf.getvalue()
+                        if len(img_bytes) > 2000:
+                            print(f"✅ [HF IMAGE] Success via InferenceClient ({model})")
+                            return img_bytes
+                    except Exception as client_err:
+                        print(f"⚠️ [HF Client] {model} fallback to raw REST: {client_err}")
+
+                # Direct REST call fallback for Hugging Face
+                api_url = f"https://api-inference.huggingface.co/models/{model}"
+                headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+                payload = {
+                    "inputs": clean_prompt,
+                    "parameters": {"width": 1024, "height": 1280}
+                }
+                resp = requests.post(api_url, headers=headers, json=payload, timeout=45)
+                if resp.status_code == 200 and len(resp.content) > 2000:
+                    print(f"✅ [HF IMAGE] Success via REST ({model})")
+                    return resp.content
+                elif resp.status_code in (402, 429):
+                    print(f"⚠️ [HF IMAGE] Rate/Quota limit ({resp.status_code}) on {model}")
+                    if resp.status_code == 402:
+                        _set_cooldown("hf_img", 1800)
+                        break
+                else:
+                    print(f"⚠️ [HF IMAGE] {model} HTTP {resp.status_code}: {resp.text[:150]}")
+            except Exception as e:
+                print(f"❌ [HF IMAGE] Error ({model}): {e}")
+
+    # ── 2. CLOUDFLARE WORKERS AI (10,000 Free Neurons Daily) ──────────────
+    if CF_ACCOUNT_ID and CF_API_TOKEN and not _is_on_cooldown("cf_img"):
+        cf_models = [
+            "@cf/black-forest-labs/flux-1-schnell",
+            "@cf/bytedance/stable-diffusion-xl-lightning",
+            "@cf/stabilityai/stable-diffusion-xl-base-1.0"
+        ]
+        for cf_model in cf_models:
+            try:
+                print(f"🎨 [CLOUDFLARE AI] Generating via {cf_model}...")
+                cf_url  = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{cf_model}"
+                headers = {"Authorization": f"Bearer {CF_API_TOKEN}"}
+                payload = {"prompt": clean_prompt, "num_steps": 4}
+                resp    = requests.post(cf_url, headers=headers, json=payload, timeout=45)
+
+                if resp.status_code == 200:
+                    content_type = resp.headers.get("Content-Type", "")
+                    if "application/json" in content_type:
+                        data    = resp.json()
+                        b64_img = data.get("result", {}).get("image")
+                        if b64_img:
+                            print(f"✅ [CLOUDFLARE AI] Success ({cf_model})")
+                            return base64.b64decode(b64_img)
+                    elif len(resp.content) > 2000:
+                        print(f"✅ [CLOUDFLARE AI] Binary image success ({cf_model})")
+                        return resp.content
+                elif resp.status_code == 429:
+                    _set_cooldown("cf_img", 300)
+                    break
+                else:
+                    print(f"⚠️ [CLOUDFLARE AI] HTTP {resp.status_code}: {resp.text[:150]}")
+            except Exception as e:
+                print(f"❌ [CLOUDFLARE AI] Error ({cf_model}): {e}")
+
+    # ── 3. TOGETHER AI (FLUX.1-schnell-Free endpoint) ─────────────────────
+    if TOGETHER_API_KEY and not _is_on_cooldown("together_img"):
+        try:
+            print("🎨 [TOGETHER AI] Generating via black-forest-labs/FLUX.1-schnell-Free...")
+            tg_url  = "https://api.together.xyz/v1/images/generations"
+            headers = {
+                "Authorization": f"Bearer {TOGETHER_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "black-forest-labs/FLUX.1-schnell-Free",
+                "prompt": clean_prompt,
+                "width": 1024,
+                "height": 1280,
+                "steps": 4,
+                "n": 1,
+                "response_format": "b64_json"
+            }
+            resp = requests.post(tg_url, headers=headers, json=payload, timeout=45)
+            if resp.status_code == 200:
+                b64_img = resp.json().get("data", [{}])[0].get("b64_json")
+                if b64_img:
+                    print("✅ [TOGETHER AI] Image generated successfully")
+                    return base64.b64decode(b64_img)
+            elif resp.status_code == 429:
+                _set_cooldown("together_img", 120)
+            else:
+                print(f"⚠️ [TOGETHER AI] HTTP {resp.status_code}: {resp.text[:150]}")
+        except Exception as e:
+            print(f"❌ [TOGETHER AI] Error: {e}")
+
+    return None
+
+def fetch_article_og_image(article_url: str) -> bytes:
+    """
+    Open-source scraper fallback: If all AI image APIs hit quota limits,
+    extract the high-res OpenGraph (og:image) press photo from the news link.
+    """
+    try:
+        resp = requests.get(article_url, headers=random_headers(), timeout=10)
+        if resp.status_code != 200:
+            return None
+        soup    = BeautifulSoup(resp.text, "lxml")
+        og_tag  = soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"})
+        if og_tag and og_tag.get("content"):
+            img_url = og_tag["content"].strip()
+            img_resp = requests.get(img_url, headers=random_headers(), timeout=12)
+            if img_resp.status_code == 200 and len(img_resp.content) > 5000:
+                print("✅ [OG:IMAGE FALLBACK] Extracted real press photo from article")
+                return img_resp.content
+    except Exception as e:
+        print(f"⚠️ [OG:IMAGE FALLBACK] Failed: {e}")
+    return None
+
+def apply_brand_overlay(image_bytes: bytes, category: str = "BREAKING NEWS") -> bytes:
+    """
+    Uses Pillow to crop/fit image to 1080x1350 (4:5 portrait) and stamps
+    a professional Navy & Gold branding bar at the bottom + category badge at top.
+    """
+    try:
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        target_w, target_h = 1080, 1350
+
+        # Resize & center-crop to 1080x1350 portrait
+        src_ratio = img.width / img.height
+        tgt_ratio = target_w / target_h
+        if src_ratio > tgt_ratio:
+            new_h = target_h
+            new_w = int(new_h * src_ratio)
+        else:
+            new_w = target_w
+            new_h = int(new_w / src_ratio)
+
+        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        left = (new_w - target_w) // 2
+        top  = (new_h - target_h) // 2
+        img  = img.crop((left, top, left + target_w, top + target_h))
+
+        draw = ImageDraw.Draw(img)
+
+        # Load font (falls back cleanly if DejaVu/Noto isn't found)
+        try:
+            font_bold  = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
+        except Exception:
+            font_bold  = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+
+        # Top Category Ribbon
+        cat_label = f" {category.upper()} "
+        draw.rectangle([(30, 30), (380, 85)], fill=(200, 16, 46))
+        draw.rectangle([(30, 81), (380, 85)], fill=(212, 175, 55))
+        draw.text((45, 42), cat_label[:22], fill=(255, 255, 255), font=font_bold)
+
+        # Bottom Branding Bar (#0D1B2A Navy + #D4AF37 Gold accent line)
+        bar_h = 95
+        draw.rectangle([(0, target_h - bar_h), (target_w, target_h)], fill=(13, 27, 42))
+        draw.rectangle([(0, target_h - bar_h), (target_w, target_h - bar_h + 6)], fill=(212, 175, 55))
+
+        brand_left  = f"{PERSONAL_BRAND['handle']}  |  {PERSONAL_BRAND['name']}"
+        brand_right = "Kushinagar & Purvanchal Updates"
+        draw.text((30, target_h - bar_h + 22), brand_left, fill=(212, 175, 55), font=font_bold)
+        draw.text((30, target_h - bar_h + 58), brand_right, fill=(255, 255, 255), font=font_small)
+
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=92)
+        return out.getvalue()
+    except Exception as e:
+        print(f"⚠️ Brand overlay error (returning original image): {e}")
+        return image_bytes
 
 # =========================================================
 # URL HELPERS
@@ -462,10 +658,10 @@ def scrape_local_site(site_name, site_url, max_items=SCRAPER_MAX_PER_SITE):
 # =========================================================
 
 RSS_FEEDS = {
-
-   
+    "GNews_Kushinagar_HI": "https://news.google.com/rss/search?q=%E0%A4%95%E0%A5%81%E0%A4%B6%E0%A5%80%E0%A4%A8%E0%A4%97%E0%A4%B0+when:1d&hl=hi&gl=IN&ceid=IN:hi",
+    "GNews_Gorakhpur_HI":  "https://news.google.com/rss/search?q=%E0%A4%97%E0%A5%8B%E0%A4%B0%E0%A4%96%E0%A4%AA%E0%A5%81%E0%A4%B0+when:1d&hl=hi&gl=IN&ceid=IN:hi",
+    "GNews_Purvanchal_HI": "https://news.google.com/rss/search?q=%E0%A4%AA%E0%A5%82%E0%A4%B0%E0%A5%8D%E0%A4%B5%E0%A4%BE%E0%A4%82%E0%A4%9A%E0%A4%B2+%E0%A4%AF%E0%A5%82%E0%A4%AA%E0%A5%80+when:1d&hl=hi&gl=IN&ceid=IN:hi",
 }
-
 
 # =========================================================
 # CLEAN LOCAL SCRAPERS
@@ -510,11 +706,10 @@ LOCAL_SCRAPERS = {
 
     "PurvanchalNews":
         "https://purvanchalnews.com/",
+
     "GaonConnection":
         "https://www.gaonconnection.com/feed",
-
 }
-
 
 # =========================================================
 # YOUTUBE FEEDS
@@ -672,7 +867,7 @@ print(f"\n✅ UNIQUE NEWS ITEMS AFTER DEDUP: {len(filtered_news)}")
 # =========================================================
 # AI GENERATION (WITH EXPONENTIAL BACKOFF FOR 429 ERRORS)
 # =========================================================
- 
+
 def _is_on_cooldown(provider: str) -> bool:
     """Return True if this provider is still in its rate-limit cooldown window."""
     resume_at = _provider_cooldown.get(provider, 0)
@@ -681,14 +876,14 @@ def _is_on_cooldown(provider: str) -> bool:
         print(f"⏳ [{provider.upper()}] on cooldown for {remaining}s more — skipping")
         return True
     return False
- 
+
 def _set_cooldown(provider: str, seconds: int = _COOLDOWN_SECONDS):
     _provider_cooldown[provider] = time.time() + seconds
     print(f"🛑 [{provider.upper()}] rate-limited → cooldown {seconds}s")
- 
- 
+
+
 def generate_ai_response(prompt, headline="", category="", article_text="", link=""):
- 
+
     # ── 1. GROQ ────────────────────────────────────────────────────────────
     if groq_client and not _is_on_cooldown("groq"):
         for model_name in GROQ_MODELS:
@@ -707,14 +902,14 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 err_str = str(e)
                 if "429" in err_str or "rate_limit" in err_str.lower():
                     _set_cooldown("groq")
-                    break                       # skip remaining groq models immediately
+                    break
                 elif "402" in err_str:
                     print("❌ GROQ 402 — no credits, skipping provider")
-                    _set_cooldown("groq", 3600) # skip for 1 hour
+                    _set_cooldown("groq", 3600)
                     break
                 else:
                     print(f"❌ GROQ [{model_name}] FAILED:", e)
- 
+
     # ── 2. SAMBANOVA ───────────────────────────────────────────────────────
     if samba_client and not _is_on_cooldown("sambanova"):
         for model_name in SAMBANOVA_MODELS:
@@ -736,7 +931,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     break
                 else:
                     print(f"❌ SAMBANOVA [{model_name}] FAILED:", e)
- 
+
     # ── 3. HuggingFace ─────────────────────────────────────────────────────
     if hf_client and not _is_on_cooldown("hf"):
         for model_name in HF_MODELS:
@@ -762,18 +957,18 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     break
                 else:
                     print(f"❌ HF [{model_name}] FAILED:", e)
- 
+
     # ── 4. OPENROUTER (free models, rotate through all) ────────────────────
     if not OPENROUTER_API_KEY:
         print("⚠️ OPENROUTER_API_KEY not set — skipping OpenRouter")
     elif _is_on_cooldown("openrouter"):
-        pass  # whole provider cooling down
+        pass
     else:
-        or_model_cooldowns = {}  # track per-model 429s within this call
- 
+        or_model_cooldowns = {}
+
         for model_name in OPENROUTER_MODELS:
             if or_model_cooldowns.get(model_name):
-                continue  # this specific model 429'd earlier this call
+                continue
             try:
                 print(f"🔥 USING OPENROUTER: {model_name}")
                 or_resp = requests.post(
@@ -792,7 +987,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     },
                     timeout=60
                 )
- 
+
                 if or_resp.status_code == 200:
                     or_data    = or_resp.json()
                     or_content = or_data["choices"][0]["message"]["content"]
@@ -801,54 +996,52 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                         return or_content
                     else:
                         print(f"⚠️ OPENROUTER empty response: {model_name} — trying next")
- 
+
                 elif or_resp.status_code == 404:
                     print(f"❌ OPENROUTER 404 — model removed: {model_name} — skipping")
- 
+
                 elif or_resp.status_code == 402:
-                    # 402 on a :free model means the account has NO credits AND the model
-                    # is not truly free under that key. Skip this model only.
                     err_body = or_resp.text[:200]
                     print(f"❌ OPENROUTER 402 [{model_name}]: {err_body} — skipping model")
- 
+
                 elif or_resp.status_code == 429:
                     err_body = or_resp.text[:300]
                     print(f"⚠️ OPENROUTER 429 [{model_name}]: {err_body}")
-                    or_model_cooldowns[model_name] = True   # mark this model, try next
-                    time.sleep(2)                           # tiny pause before next model
- 
+                    or_model_cooldowns[model_name] = True
+                    time.sleep(2)
+
                 else:
                     print(f"❌ OPENROUTER HTTP {or_resp.status_code} [{model_name}]: {or_resp.text[:200]}")
- 
+
             except Exception as e:
                 print(f"❌ OPENROUTER FAILED [{model_name}]: {e}")
- 
+
     # SMART FALLBACK FORMATTER
     print("\n⚠️ USING SMART FALLBACK FORMATTER")
     try:
         if not headline or headline.strip() == "":
             title_match = re.search(r"(?:news title|title):\s*(.+)", prompt, re.IGNORECASE)
             headline = title_match.group(1).strip() if title_match else "Breaking News"
- 
+
         if not category or category.strip() == "":
             category_match = re.search(r"category:\s*(.+)", prompt, re.IGNORECASE)
             category = category_match.group(1).strip() if category_match else "News"
- 
+
         if not article_text or len(article_text.strip()) < 50:
             article_match = re.search(
                 r"(?:full article|article):\s*(.+?)(?:source link|link):",
                 prompt, re.DOTALL | re.IGNORECASE
             )
             article_text = article_match.group(1).strip() if article_match else headline
- 
+
         if not link or link.strip() == "":
             link_match = re.search(r"(?:source link|link):\s*(.+)", prompt, re.IGNORECASE)
             link = link_match.group(1).strip() if link_match else ""
- 
+
         clean_text     = re.sub(r'\s+', ' ', article_text).strip()
         sentences      = re.split(r'(?<=[.!?।])\s+|;\s*', clean_text)
         important_lines = []
- 
+
         for sentence in sentences:
             sentence = sentence.strip()
             if any(x in sentence.lower() for x in [
@@ -860,7 +1053,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                 important_lines.append(sentence)
             if len(important_lines) >= 10:
                 break
- 
+
         if len(important_lines) < 10:
             chunks = [clean_text[i:i+85].strip() for i in range(0, min(len(clean_text), 900), 85)]
             for chunk in chunks:
@@ -868,7 +1061,7 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
                     important_lines.append(chunk)
                 if len(important_lines) >= 10:
                     break
- 
+
         backup_points = [
             "इस महत्वपूर्ण घटनाक्रम के बाद संबंधित विभागों और प्रशासनिक टीमों को अलर्ट मोड पर रखा गया है।",
             "ग्राउंड जीरो पर मौजूद सुरक्षा बल और जांच एजेंसियां मामले की हर एक कड़ी को बारीकी से खंगाल रही हैं।",
@@ -880,10 +1073,10 @@ def generate_ai_response(prompt, headline="", category="", article_text="", link
             if len(important_lines) >= 10:
                 break
             important_lines.append(pt)
- 
+
         summary  = "\n\n".join([f"• {line}" for line in important_lines[:12]])
         hashtags = f"#{category.replace(' ', '')} #BreakingNews #IndiaNews #ViralNews #FlashNews"
- 
+
         return f"""
 🔥 BREAKING NEWS
 📰 {headline}
@@ -922,169 +1115,46 @@ Political Toxicity: 0/10
 """
 
 # =========================================================
-# AI IMAGE PROMPT GENERATOR
-# Produces a ready-to-paste Midjourney / DALL-E / Ideogram
-# prompt for a 1080 × 1350 px professional news post.
-# Sent as a SEPARATE Telegram message chunk after the article.
+# AI VISUAL SCENE PROMPT BUILDER
 # =========================================================
 
-# def generate_image_prompt(
-#     headline: str,
-#     category: str,
-#     article_text: str,
-#     final_score: float,
-#     emotion_score: int,
-#     short_link: str,
-# ) -> str:
-#     """
-#     Uses the AI cascade to write a detailed image-generation prompt.
-#     Returns the raw prompt string (not an image).
-#     """
+def build_visual_scene_prompt(headline: str, category: str, article_text: str, emotion_score: int) -> str:
+    """
+    Translates Hindi/regional news context into a concise English visual scene prompt
+    for FLUX.1-schnell / SDXL (strictly avoiding rendered text inside the raw AI photo).
+    """
+    mood_map = {
+        "Crime":         "dark red warning atmosphere, police investigation scene, dramatic lighting",
+        "Breaking":      "urgent breaking news broadcast atmosphere, high contrast",
+        "Defense":       "patriotic Indian military atmosphere, tactical setting",
+        "India Politics":"formal Indian political rally stage, press conference microphones",
+        "Sports":        "vibrant stadium crowd energy, dynamic sports action lighting",
+        "Kushinagar":    "Uttar Pradesh rural & town streetscape, golden sunlight, authentic Indian setting",
+        "Gorakhpur":     "Gorakhpur Uttar Pradesh urban streetscape, authentic Indian photojournalism",
+    }
+    mood_cue = "authentic Indian photojournalism scene, editorial lighting"
+    for key, val in mood_map.items():
+        if key.lower() in category.lower():
+            mood_cue = val
+            break
 
-#     # ── Extract a 1–2 sentence news summary for the prompt ──────────────
-#     clean_text = re.sub(r'\s+', ' ', article_text or headline).strip()
-#     sentences  = re.split(r'(?<=[.!?।])\s+', clean_text)
-#     summary_for_prompt = " ".join(sentences[:2])[:300]
+    meta_prompt = (
+        f"Write ONE single-sentence English visual description (maximum 40 words) for a photorealistic "
+        f"news photograph representing this headline: '{headline}'. "
+        f"Mood: {mood_cue}. Do NOT include any text, letters, banners, or words in the description. "
+        f"Return ONLY the English description sentence."
+    )
 
-#     # ── Decide mood / colour palette based on category ──────────────────
-#     mood_map = {
-#         "Crime":         ("dark red warning atmosphere, crime scene yellow tape",         "crimson and dark red"),
-#         "Breaking":      ("urgent breaking news red-alert broadcast style",               "red, white, electric blue"),
-#         "Defense":       ("military patriotic Indian tricolor",                           "saffron, white, green, navy"),
-#         "India Politics":("formal political rally stage with Indian flags",               "deep blue, saffron, white"),
-#         "India Pakistan":("tense border atmosphere, Indian Army soldiers",                "olive green, desert beige"),
-#         "Sports":        ("vibrant stadium crowd energy, dynamic action lighting",        "gold, electric blue, white"),
-#         "Entertainment": ("Bollywood glam spotlight, glamorous neon lights",              "pink, gold, deep purple"),
-#         "Health":        ("clean medical professional environment, calming",              "mint green, white, light blue"),
-#         "Business":      ("corporate futuristic city skyline financial district",         "navy blue, gold, silver"),
-#         "Technology":    ("futuristic digital circuit glowing neon cyber aesthetic",      "electric blue, neon green, black"),
-#         "World":         ("global world map hologram geopolitical",                       "blue, silver, white"),
-#         "Kushinagar":    ("rural UP landscape golden fields sunrise, village community",  "golden yellow, green, earthy brown"),
-#         "Gorakhpur":     ("city of Gorakhpur urban streetscape, Gorakhnath temple hint",  "saffron, maroon, white"),
-#     }
+    scene_en = generate_ai_response(meta_prompt, headline=headline, category=category)
+    if not scene_en or "BREAKING NEWS" in scene_en or len(scene_en) > 350:
+        scene_en = f"Authentic Indian photojournalism scene representing {category} news in Uttar Pradesh, {mood_cue}"
 
-#     # Fall back: check for partial category matches
-#     mood_desc, palette = "dramatic news broadcast professional studio", "deep navy, gold, white"
-#     for key, (m, p) in mood_map.items():
-#         if key.lower() in category.lower():
-#             mood_desc, palette = m, p
-#             break
-
-#     # ── Emotional intensity cue ──────────────────────────────────────────
-#     if emotion_score >= 8:
-#         intensity = "high-drama cinematic lighting, bold shadows, urgent tension"
-#     elif emotion_score >= 5:
-#         intensity = "balanced editorial lighting, confident and impactful"
-#     else:
-#         intensity = "clean calm informational style, professional neutrality"
-
-#     # ── Build the meta-prompt for the AI to refine ──────────────────────
-#     meta_prompt = f"""
-# You are a world-class creative director specialising in viral social media news post design.
-# Generate ONE highly detailed image-generation prompt for Midjourney / DALL-E 3 / Ideogram
-# to create a 1080 × 1350 px portrait professional news post image.
-
-# NEWS CONTEXT:
-# - Headline  : {headline}
-# - Category  : {category}
-# - Summary   : {summary_for_prompt}
-# - Mood cue  : {mood_desc}
-# - Palette   : {palette}
-# - Intensity : {intensity}
-
-# PERSONAL BRANDING to embed visually in the prompt:
-# - Creator name  : {PERSONAL_BRAND["name"]}
-# - Handle        : {PERSONAL_BRAND["handle"]}
-# - Tagline       : {PERSONAL_BRAND["tagline"]}
-# - Logo hint     : {PERSONAL_BRAND["logo_desc"]}
-# - Color theme   : {PERSONAL_BRAND["color_theme"]}
-
-# MANDATORY DESIGN REQUIREMENTS you must include in the prompt:
-# 1. Canvas: portrait 1080×1350 px, no cropping
-# 2. Top strip: bold "BREAKING NEWS" or category label in white on coloured ribbon
-# 3. Centre: dramatic visual scene that represents the news (photorealistic, no text in the scene)
-# 4. Lower third: dark gradient overlay with bold Devanagari + English headline text placeholder
-# 5. Bottom bar: brand colours ({PERSONAL_BRAND["color_theme"]}) with watermark "{PERSONAL_BRAND["handle"]}" and tagline
-# 6. Typography style: bold condensed sans-serif for English, Noto Sans Devanagari style for Hindi
-# 7. Style: ultra-HD photorealistic editorial magazine cover, 8K quality, professional post-processing
-# 8. NO fake logos, NO real brand marks, NO copyrighted symbols
-
-# Return ONLY the image prompt — no explanation, no markdown, no preamble. 
-# The prompt must be one long paragraph of 120–180 words.
-# """.strip()
-
-#     print("🎨 GENERATING AI IMAGE PROMPT...")
-#     image_prompt = generate_ai_response(
-#         prompt=meta_prompt,
-#         headline=headline,
-#         category=category,
-#         article_text=article_text,
-#         link=""
-#     )
-
-#     # ── Fallback static prompt if AI fails ──────────────────────────────
-#     if not image_prompt or len(image_prompt.strip()) < 60:
-#         image_prompt = (
-#             f"Ultra-HD photorealistic professional social media news post, portrait 1080x1350px. "
-#             f"Top: bold red ribbon strip with white text 'BREAKING NEWS — {category}'. "
-#             f"Centre: dramatic {mood_desc} scene representing the news event, cinematic {intensity}, "
-#             f"colour palette of {palette}. Lower third: dark semi-transparent gradient overlay with "
-#             f"bold white condensed headline placeholder text. "
-#             f"Bottom bar in {PERSONAL_BRAND['color_theme']} colours featuring watermark "
-#             f"'{PERSONAL_BRAND['handle']}' in gold and tagline '{PERSONAL_BRAND['tagline']}' "
-#             f"in small white text. {PERSONAL_BRAND['logo_desc']} in bottom-right corner. "
-#             f"Style: editorial magazine cover quality, 8K, professional post-processing, no fake logos."
-#         )
-
-#     return image_prompt.strip()
-
-
-# def build_image_prompt_message(
-#     headline: str,
-#     category: str,
-#     article_text: str,
-#     final_score: float,
-#     emotion_score: int,
-#     short_link: str,
-#     article_idx: int,
-# ) -> str:
-#     """
-#     Wraps the raw image prompt in a formatted Telegram message block.
-#     """
-#     prompt_text = generate_image_prompt(
-#         headline=headline,
-#         category=category,
-#         article_text=article_text,
-#         final_score=final_score,
-#         emotion_score=emotion_score,
-#         short_link=short_link,
-#     )
-
-#     message = f"""
-# 🎨 AI IMAGE PROMPT — Article #{article_idx}
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 📐 Target Size : 1080 × 1350 px (Portrait / Instagram Post)
-# 📂 Category    : {category}
-# 📰 Headline    : {headline}
-# 📈 Viral Score : {final_score}
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-# 🖼️ PASTE THIS PROMPT IN MIDJOURNEY / DALL-E 3 / IDEOGRAM:
-
-# {prompt_text}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 💡 TIPS:
-# • Midjourney   → paste prompt + add  --ar 4:5 --v 6 --style raw
-# • DALL-E 3     → paste as-is in ChatGPT image mode
-# • Ideogram     → paste prompt, select "Realistic" style, 1080×1350
-# • Canva AI     → use as text-to-image prompt, set canvas 1080×1350
-
-# 🔗 News Link: {short_link}
-# 📸 {PERSONAL_BRAND["instagram"]}
-# """.strip()
-
-#     return message
+    scene_en = re.sub(r'\s+', ' ', scene_en).strip()
+    return (
+        f"Ultra-HD editorial press photography, portrait 4:5 aspect ratio. "
+        f"{scene_en}. Realistic Indian setting, cinematic lighting, 8k resolution, "
+        f"sharp focus, strictly no text, no watermarks, no deformed faces."
+    )
 
 # =========================================================
 # KEYWORD BANKS
@@ -1300,6 +1370,11 @@ STRICT OUTPUT FORMAT — bilkul is structure mein likho, koi extra heading mat a
    - Mix: 3 broad (#BreakingNews #Viral) + 3 topic-specific + 2 local (#Kushinagar #Purvanchal)
    - No spaces inside hashtags
 
+Also append at the very end:
+Emotion Score: X/10
+Virality Score: Y/10
+Political Toxicity: Z/10
+
 ---
 INPUT DATA:
 शीर्षक / Title: {headline}
@@ -1358,40 +1433,42 @@ QUALITY RULES — इन्हें तोड़ा तो content reject ह�
             print(f"⏭️ SKIPPED LOW FINAL SCORE: {headline} ({final_score})")
             continue
 
-        print(f"🚀 FINAL SCORE PASSED ({final_score}) — SENDING TELEGRAM")
+        print(f"🚀 FINAL SCORE PASSED ({final_score}) — GENERATING IMAGE & SENDING TELEGRAM")
 
         cleaned_link = clean_url(link)
         short_link   = shorten_url(cleaned_link)
 
         article_idx += 1
 
-# =================================================
-        # CHUNK 1 — GENERATE & SEND IMAGE
         # =================================================
-        
-        image_prompt = (
-            f"Ultra-HD photorealistic news image, portrait 1080x1350px. "
-            f"Dramatic scene representing: {headline}. "
-            f"Category: {category}. Professional editorial magazine cover quality, "
-            f"no text in the scene, 8K resolution, cinematic lighting. "
-            f"Color theme: {PERSONAL_BRAND['color_theme']}."
-        )
-        
-        print(f"🎨 GENERATING IMAGE for article #{article_idx}...")
-        
-        # Try Pollinations first
-        img_data = get_free_image_url(image_prompt)
-        
-        # Simple test to see if Pollinations is up, otherwise fallback to HF
-        try:
-            img_test = requests.head(img_data, timeout=5)
-            if img_test.status_code != 200:
-                img_data = get_hf_fallback_image(image_prompt) or img_data
-        except:
-            img_data = get_hf_fallback_image(image_prompt) or img_data
+        # CHUNK 1 — GENERATE AI IMAGE (WITH OG FALLBACK) & SEND PHOTO
+        # =================================================
 
-        send_telegram_photo(img_data)
-        time.sleep(TELEGRAM_SLEEP_TIME)
+        visual_prompt = build_visual_scene_prompt(
+            headline=headline,
+            category=category,
+            article_text=article_text,
+            emotion_score=emotion_score
+        )
+        print(f"🎨 IMAGE PROMPT: {visual_prompt}")
+
+        raw_image_bytes = generate_image_bytes(visual_prompt)
+        if not raw_image_bytes:
+            print("⚠️ All AI image APIs exhausted/failed — trying article og:image fallback...")
+            raw_image_bytes = fetch_article_og_image(cleaned_link)
+
+        if raw_image_bytes:
+            branded_bytes = apply_brand_overlay(raw_image_bytes, category=category)
+            photo_caption = (
+                f"🔥 {headline}\n"
+                f"📂 {category} | 📈 Viral Score: {final_score}\n"
+                f"📢 {PERSONAL_BRAND['handle']}"
+            )
+            send_telegram_photo_bytes(branded_bytes, caption=photo_caption)
+            print(f"✅ CHUNK 1 (BRANDED PHOTO) SENT — Article #{article_idx}")
+            time.sleep(TELEGRAM_SLEEP_TIME)
+        else:
+            print(f"⚠️ No image available for Article #{article_idx} — sending text only")
 
         # =================================================
         # CHUNK 2 — FULL ARTICLE (text)
@@ -1405,6 +1482,8 @@ QUALITY RULES — इन्हें तोड़ा तो content reject ह�
 📈 Viral Score: {final_score}
 ❤️ Emotion: {emotion_score}/10
 🚀 Virality: {virality_score}/10
+🔥 Trend Weight: {trending_score}/5.0
+⚠️ Toxicity: {toxicity_score}/10
 ====================
 {ai_result}
 ====================
@@ -1418,7 +1497,10 @@ Follow us on:
 """.strip()
 
         send_telegram_message(telegram_message)
-        print(f"✅ ARTICLE SENT — Article #{article_idx}")
+        print(f"✅ CHUNK 2 (ARTICLE) SENT — Article #{article_idx}")
+
+        time.sleep(TELEGRAM_SLEEP_TIME)
+
         # =================================================
         # STORE RESULT
         # =================================================
@@ -1434,6 +1516,7 @@ Follow us on:
             "toxicity_score": toxicity_score,
             "trending_score": trending_score,
             "final_score":    final_score,
+            "image_prompt":   visual_prompt,
             "ai_result":      ai_result,
         })
 
