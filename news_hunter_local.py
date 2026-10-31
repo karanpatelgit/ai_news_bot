@@ -171,6 +171,45 @@ def is_similar(a, b, threshold=0.7):
 # =========================================================
 # TELEGRAM — TEXT ONLY
 # =========================================================
+import urllib.parse
+
+def get_free_image_url(prompt: str) -> str:
+    """Primary: Pollinations.ai (FLUX model, open-source, no key needed)"""
+    clean_prompt = prompt.replace("\n", " ").strip()
+    encoded_prompt = urllib.parse.quote(clean_prompt)
+    return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1350&model=flux&nologo=true"
+
+def get_hf_fallback_image(prompt: str):
+    """Fallback: Hugging Face SDXL using your existing HF_TOKEN"""
+    if not HF_TOKEN:
+        return None
+    try:
+        url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+        response = requests.post(url, headers=headers, json={"inputs": prompt}, timeout=30)
+        if response.status_code == 200:
+            return response.content
+    except Exception as e:
+        print("❌ HF Image Fallback Error:", e)
+    return None
+
+def send_telegram_photo(photo_data):
+    """Handles both URL strings (Pollinations) and raw bytes (Hugging Face)"""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    chat_ids = _parse_chat_ids(TELEGRAM_CHAT_IDS)
+    if not chat_ids and CHAT_ID:
+        chat_ids = [CHAT_ID]
+        
+    for target_chat_id in chat_ids:
+        try:
+            if isinstance(photo_data, str) and photo_data.startswith("http"):
+                requests.post(url, data={"chat_id": target_chat_id, "photo": photo_data}, timeout=30)
+            else:
+                files = {"photo": ("image.jpg", photo_data, "image/jpeg")}
+                requests.post(url, data={"chat_id": target_chat_id}, files=files, timeout=30)
+            print(f"✅ TELEGRAM PHOTO SENT -> {target_chat_id}")
+        except Exception as e:
+            print(f"❌ TELEGRAM PHOTO ERROR -> {target_chat_id}:", e)
 
 def _parse_chat_ids(raw: str):
     if not raw:
@@ -1326,8 +1365,36 @@ QUALITY RULES — इन्हें तोड़ा तो content reject ह�
 
         article_idx += 1
 
+# =================================================
+        # CHUNK 1 — GENERATE & SEND IMAGE
         # =================================================
-        # CHUNK 1 — FULL ARTICLE (text)
+        
+        image_prompt = (
+            f"Ultra-HD photorealistic news image, portrait 1080x1350px. "
+            f"Dramatic scene representing: {headline}. "
+            f"Category: {category}. Professional editorial magazine cover quality, "
+            f"no text in the scene, 8K resolution, cinematic lighting. "
+            f"Color theme: {PERSONAL_BRAND['color_theme']}."
+        )
+        
+        print(f"🎨 GENERATING IMAGE for article #{article_idx}...")
+        
+        # Try Pollinations first
+        img_data = get_free_image_url(image_prompt)
+        
+        # Simple test to see if Pollinations is up, otherwise fallback to HF
+        try:
+            img_test = requests.head(img_data, timeout=5)
+            if img_test.status_code != 200:
+                img_data = get_hf_fallback_image(image_prompt) or img_data
+        except:
+            img_data = get_hf_fallback_image(image_prompt) or img_data
+
+        send_telegram_photo(img_data)
+        time.sleep(TELEGRAM_SLEEP_TIME)
+
+        # =================================================
+        # CHUNK 2 — FULL ARTICLE (text)
         # =================================================
 
         telegram_message = f"""
@@ -1338,8 +1405,6 @@ QUALITY RULES — इन्हें तोड़ा तो content reject ह�
 📈 Viral Score: {final_score}
 ❤️ Emotion: {emotion_score}/10
 🚀 Virality: {virality_score}/10
-🔥 Trend Weight: {trending_score}/5.0
-⚠️ Toxicity: {toxicity_score}/10
 ====================
 {ai_result}
 ====================
@@ -1353,30 +1418,7 @@ Follow us on:
 """.strip()
 
         send_telegram_message(telegram_message)
-        print(f"✅ CHUNK 1 (ARTICLE) SENT — Article #{article_idx}")
-
-        time.sleep(TELEGRAM_SLEEP_TIME)
-
-        # =================================================
-        # CHUNK 2 — AI IMAGE PROMPT
-        # Generates a professional 1080×1350 px prompt
-        # with news context + personal branding embedded
-        # =================================================
-
-        # print(f"🎨 GENERATING IMAGE PROMPT for article #{article_idx}...")
-        # image_prompt_message = build_image_prompt_message(
-        #     headline=headline,
-        #     category=category,
-        #     article_text=article_text,
-        #     final_score=final_score,
-        #     emotion_score=emotion_score,
-        #     short_link=short_link,
-        #     article_idx=article_idx,
-        # )
-
-        # send_telegram_message(image_prompt_message)
-        # print(f"✅ CHUNK 2 (IMAGE PROMPT) SENT — Article #{article_idx}")
-
+        print(f"✅ ARTICLE SENT — Article #{article_idx}")
         # =================================================
         # STORE RESULT
         # =================================================
