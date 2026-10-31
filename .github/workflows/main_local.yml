@@ -49,41 +49,21 @@ jobs:
           key: playwright-${{ runner.os }}
 
       # ===================================================
-      # INSTALL DEPENDENCIES
+      # INSTALL DEPENDENCIES & FONTS
       # ===================================================
 
       - name: Install Dependencies
         run: |
-
+          sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
           python -m pip install --upgrade pip
+          pip install             feedparser             pandas             requests             python-dotenv             openai             trafilatura             beautifulsoup4             lxml             playwright             pillow             huggingface_hub
 
-          pip install \
-            feedparser \
-            pandas \
-            requests \
-            python-dotenv \
-            openai \
-            trafilatura \
-            beautifulsoup4 \
-            lxml \
-            playwright
-
-      # ===================================================
-      # INSTALL HUGGINGFACE IMAGE DEPENDENCIES
-      # ===================================================
-
-      - name: Install HuggingFace Image Dependencies
-        run: |
-
-          pip install pillow
-          pip install huggingface_hub
       # ===================================================
       # INSTALL PLAYWRIGHT BROWSER
       # ===================================================
 
       - name: Install Playwright Chromium
         run: |
-
           playwright install chromium
           playwright install-deps
 
@@ -93,13 +73,10 @@ jobs:
 
       - name: Show Runtime Info
         run: |
-
           echo "========== PYTHON VERSION =========="
           python --version
-
           echo "========== CURRENT UTC TIME =========="
           date -u
-
           echo "========== PLAYWRIGHT VERSION =========="
           python -m playwright --version
 
@@ -108,31 +85,21 @@ jobs:
       # ===================================================
 
       - name: Run News Hunter Bot
-
         env:
-
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-
           SAMBANOVA_API_KEY: ${{ secrets.SAMBANOVA_API_KEY }}
-
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-          TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
-
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
           CANVA_EMAIL: ${{ secrets.CANVA_EMAIL }}
-
           CANVA_PASSWORD: ${{ secrets.CANVA_PASSWORD }}
-
         run: |
-
           echo "🔥 STARTING NEWS HUNTER BOT"
-
           python news_hunter_local.py
 
       # ===================================================
@@ -140,15 +107,9 @@ jobs:
       # ===================================================
 
       - name: Upload CSV Artifact
-
         uses: actions/upload-artifact@v4
-
         if: always()
-
         with:
-
           name: viral-news-results
-
           path: viral_reel_news.csv
-
           if-no-files-found: ignore
